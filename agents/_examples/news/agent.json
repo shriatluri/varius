@@ -1,0 +1,14 @@
+{
+  "id": "news",
+  "name": "News Desk",
+  "channel": "C_REPLACE_ME",
+  "model": "sonnet",
+  "interactive": false,
+  "allowedTools": ["Read", "Write", "WebSearch", "WebFetch"],
+  "maxTurns": 30,
+  "timeoutSec": 900,
+  "schedule": {
+    "prompt": "prompts/daily.md",
+    "onCalendar": "*-*-* 07:00:00"
+  }
+}

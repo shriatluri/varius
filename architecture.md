@@ -85,7 +85,8 @@ file, the result is posted as a **new top-level message**, and the session is
 │   ├── bridge.ts           Slack Socket Mode listener
 │   ├── slack.ts            chat.postMessage wrapper
 │   ├── registry.ts         scan agents/, validate manifests, hold in memory
-│   └── types.ts            AgentManifest, RunResult
+│   ├── cli.ts              npm run post / npm run agent entrypoints
+│   └── types.ts            AgentManifest, RunRecord
 ├── deploy/
 │   ├── fleet-bridge.service
 │   ├── fleet-agent@.service    templated, takes agent id
@@ -96,6 +97,8 @@ file, the result is posted as a **new top-level message**, and the session is
 │   ├── research/
 │   ├── tutor/
 │   └── projx/
+├── docs/
+│   └── SETUP.md            manual once-per-box steps (§12)
 └── scripts/
     ├── new-agent.sh        scaffold a folder from _examples
     ├── sync-units.sh       generate per-agent timer drop-ins from manifests

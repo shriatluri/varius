@@ -1,0 +1,8 @@
+node_modules/
+agents/*
+!agents/_examples/
+!agents/_examples/**
+runs.jsonl
+.env
+*/repo/
+*.log

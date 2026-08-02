@@ -1,0 +1,10 @@
+# /etc/systemd/system/fleet-agent@.service — templated, %i is the agent id
+[Unit]
+Description=Fleet scheduled run: %i
+
+[Service]
+Type=oneshot
+User=fleet
+WorkingDirectory=/srv/fleet
+EnvironmentFile=/srv/fleet/.env
+ExecStart=/usr/bin/npx tsx src/cli.ts agent %i

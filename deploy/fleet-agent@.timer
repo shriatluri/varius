@@ -1,0 +1,14 @@
+# /etc/systemd/system/fleet-agent@.timer — templated, %i is the agent id
+#
+# Deliberately carries no OnCalendar: a template unit cannot vary it per
+# instance. scripts/sync-units.sh reads each manifest's schedule.onCalendar
+# and writes /etc/systemd/system/fleet-agent@<id>.timer.d/schedule.conf.
+# The manifest is the single source of truth; never edit a drop-in by hand.
+[Unit]
+Description=Fleet schedule for %i
+
+[Timer]
+Persistent=true
+
+[Install]
+WantedBy=timers.target

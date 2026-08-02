@@ -1,0 +1,21 @@
+{
+  "name": "varius-fleet",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Personal fleet of Claude Code agents on a single VPS",
+  "scripts": {
+    "post": "tsx src/cli.ts post",
+    "agent": "tsx src/cli.ts agent",
+    "bridge": "tsx src/bridge.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@slack/bolt": "^4",
+    "@slack/web-api": "^7"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "tsx": "^4",
+    "typescript": "^5"
+  }
+}

@@ -1,0 +1,17 @@
+# /etc/systemd/system/fleet-bridge.service
+[Unit]
+Description=Fleet Slack bridge (Socket Mode listener)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=fleet
+WorkingDirectory=/srv/fleet
+EnvironmentFile=/srv/fleet/.env
+ExecStart=/usr/bin/npx tsx src/bridge.ts
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
