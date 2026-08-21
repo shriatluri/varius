@@ -4,7 +4,8 @@
 #
 # After creating: generate an app-level token with connections:write (→ xapp-,
 # SLACK_APP_TOKEN), install to workspace (→ xoxb- Bot User OAuth Token,
-# SLACK_BOT_TOKEN), then /invite the bot to every #ag-* channel.
+# SLACK_BOT_TOKEN), then /invite the bot to every fleet channel (#news,
+# #research, #guru, #ops).
 display_information:
   name: Varius Fleet
 features:
@@ -15,7 +16,7 @@ oauth_config:
   scopes:
     bot:
       - chat:write          # post digests and replies
-      - channels:history    # read messages in public #ag-* channels
+      - channels:history    # read messages in public fleet channels
       - groups:history      # read messages in private channels (future)
       - app_mentions:read
 settings:
