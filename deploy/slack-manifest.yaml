@@ -1,0 +1,30 @@
+# Slack app manifest for the Varius fleet bot (architecture.md §12, SETUP.md §3).
+# Create the app from this at https://api.slack.com/apps → Create New App →
+# From an app manifest. One bot serves the whole fleet; channels route to agents.
+#
+# After creating: generate an app-level token with connections:write (→ xapp-,
+# SLACK_APP_TOKEN), install to workspace (→ xoxb- Bot User OAuth Token,
+# SLACK_BOT_TOKEN), then /invite the bot to every #ag-* channel.
+display_information:
+  name: Varius Fleet
+features:
+  bot_user:
+    display_name: varius-fleet
+    always_online: true
+oauth_config:
+  scopes:
+    bot:
+      - chat:write          # post digests and replies
+      - channels:history    # read messages in public #ag-* channels
+      - groups:history      # read messages in private channels (future)
+      - app_mentions:read
+settings:
+  event_subscriptions:
+    bot_events:
+      - message.channels    # inbound from public channels
+      - message.groups      # inbound from private channels (invisible without this)
+      - app_mention
+  socket_mode_enabled: true # no inbound ports / public URL (architecture.md §6)
+  org_deploy_enabled: false
+  is_hosted: false
+  token_rotation_enabled: false
