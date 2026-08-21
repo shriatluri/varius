@@ -28,7 +28,7 @@ repo.
       `channels:history`, `groups:history`, `app_mentions:read`
 - [ ] Event subscriptions: `message.channels` **and** `message.groups`
       (private channels are invisible without the second)
-- [ ] Create `#ag-<id>` channels plus `#ag-ops`; invite the bot to each;
+- [ ] Create `#<id>` channels plus `#ops`; invite the bot to each;
       put the ops channel ID in `.env` as `OPS_CHANNEL`
 
 ## 4. systemd

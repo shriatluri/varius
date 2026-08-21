@@ -42,6 +42,33 @@ a refactor.
 
 ## 3. Architecture
 
+### The pieces, in plain terms
+
+- **Bridge** — the *ears*. Listens to Slack over Socket Mode and hands each
+  message to the right agent. Only needed for the inbound (interactive) path.
+  Bridge up → agents answer you; bridge down → scheduled digests still fire,
+  but nobody hears your messages.
+- **Runner** — the *worker*. Spawns `claude -p` in the agent's folder, posts the
+  reply/digest back, appends a run record. **Both** triggers go through it.
+- **Agent** — just a *folder* (`agents/<id>/`) with instructions. No code (§2).
+
+Two triggers, one worker:
+
+```
+INTERACTIVE                          SCHEDULED
+you message #research             systemd timer (or `npm run agent -- news`)
+   │                                    │
+   ▼                                    │
+ bridge  (channel → agent)              │
+   │                                    │
+   └──────────────▶ runner ◀────────────┘
+                      │  spawn claude -p (cwd = agent dir)
+                      │  → agent returns text
+                      ▼
+             post to Slack + append runs.jsonl
+      (interactive: threaded reply · scheduled: top-level digest)
+```
+
 ```
                     ┌────────────────────────┐
   Slack message ───▶│                        │
@@ -95,7 +122,7 @@ file, the result is posted as a **new top-level message**, and the session is
 │   ├── _examples/          committed reference agents
 │   ├── news/
 │   ├── research/
-│   ├── tutor/
+│   ├── guru/
 │   └── projx/
 ├── docs/
 │   └── SETUP.md            manual once-per-box steps (§12)
@@ -190,7 +217,7 @@ its final output.
 
 ### Naming convention
 
-Folder name = `id` = Slack channel `#ag-<id>` = systemd unit
+Folder name = `id` = Slack channel `#<id>` = systemd unit
 `fleet-agent@<id>`. Lowercase, hyphens, no underscores. Keep these in lockstep;
 the tooling assumes it.
 
@@ -283,7 +310,7 @@ is largely handled. The gap this addresses is *cross-session* knowledge.
 | Agent | Persistent context | Why |
 |---|---|---|
 | **projx** (coding) | Thin. Notion + Linear MCP cover docs and tickets; the repo and git history cover the rest. Optionally a short decisions log for *why* — especially rejected approaches, which nothing else records. | The code is the context |
-| **tutor** | A structured progress file, overwritten in place: chapter, what landed, what didn't, what to revisit. Never grows. | Memory *is* the product here |
+| **guru** (tutor) | A structured progress file, overwritten in place: chapter, what landed, what didn't, what to revisit. Never grows. | Memory *is* the product here |
 | **news** | None. Optionally a rolling 20-line "recently covered" list that trims itself. | Yesterday's news is not context |
 | **research** | None initially. Revisit if it starts repeating itself. | |
 
@@ -344,7 +371,7 @@ now costs a dependency and a module for benefits we can't yet name.
 ## 9. Conventions
 
 - **Errors go to Slack, not just logs.** A failed run posts a short message to
-  its own channel plus `#ag-ops`. Silent failure is the main way a fleet like
+  its own channel plus `#ops`. Silent failure is the main way a fleet like
   this rots.
 - **Threaded replies for inbound, top-level for scheduled.** Keeps digests
   scannable.
@@ -366,7 +393,7 @@ This box holds a GitHub credential and a Claude OAuth token. Treat it like it.
 - Runs as a non-root `fleet` user. Never root.
 - **No `--dangerously-skip-permissions`.** Ever. Not "temporarily."
 - `allowedTools` is per-agent and minimal:
-  - news / research / tutor → `Read`, `Write`, `WebSearch`, `WebFetch`
+  - news / research / guru → `Read`, `Write`, `WebSearch`, `WebFetch`
   - coding agent → adds `Edit`, `Bash`, scoped via permission syntax, and only
     inside its own `repo/`
 - `Bash(*)` does not mean what it looks like — read the permissions syntax in
@@ -426,11 +453,11 @@ time.
 | # | Outcome | Done when |
 |---|---|---|
 | 1 | VPS runs an authenticated Claude Code as a service user | `claude -p "say hi"` returns as `fleet` |
-| 2 | Slack bot can post to a channel from the VPS | `npm run post -- news "hello"` appears in `#ag-news` |
+| 2 | Slack bot can post to a channel from the VPS | `npm run post -- news "hello"` appears in `#news` |
 | 3 | Runner executes any agent folder | `npm run agent -- news` runs and posts output |
-| 4 | Scheduled agents fire unattended | Digest lands in `#ag-news` at 07:00 two days running, laptop closed |
-| 5 | Replying in a channel talks to that agent | Follow-up in `#ag-research` gets a context-aware answer |
-| 6 | Coding agent opens a PR from Slack | Message in `#ag-projx` produces a branch and PR |
+| 4 | Scheduled agents fire unattended | Digest lands in `#news` at 07:00 two days running, laptop closed |
+| 5 | Replying in a channel talks to that agent | Follow-up in `#research` gets a context-aware answer |
+| 6 | Coding agent opens a PR from Slack | Message in `#projx` produces a branch and PR |
 
 Plus a standing **Ops** issue that never closes: log rotation, failure alerts,
 weekly cost rollup, notes pruning.
