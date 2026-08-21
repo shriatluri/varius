@@ -48,6 +48,16 @@ function claudeArgs(agent: Agent, prompt: string, resumeSessionId?: string): str
     '--max-turns', String(m.maxTurns),
   ];
   if (m.allowedTools.length > 0) args.push('--allowedTools', ...m.allowedTools);
+
+  // Scope MCP per agent (§5). Without --strict-mcp-config, `claude -p` inherits
+  // the operator's global MCP servers (Slack, Notion, …) — a context-budget leak
+  // and a correctness hazard: an agent that sees slack_send_message tries to post
+  // itself instead of returning its result. Load only the agent's own .mcp.json,
+  // or nothing if it has none.
+  const mcpConfig = path.join(agent.dir, '.mcp.json');
+  if (fs.existsSync(mcpConfig)) args.push('--mcp-config', mcpConfig);
+  args.push('--strict-mcp-config');
+
   if (resumeSessionId) args.push('--resume', resumeSessionId);
   return args;
 }
