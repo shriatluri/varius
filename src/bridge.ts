@@ -24,8 +24,11 @@ app.message(async ({ message }) => {
     bot_id?: string;
   };
 
-  // Ignore bot messages (including our own) or build an infinite loop on day one (§9).
-  if (m.subtype === 'bot_message' || m.bot_id) return;
+  // Only react to plain user messages. Ignore our own/other bots (infinite loop,
+  // §9) AND every system event — channel_join, channel_name (rename), message_changed,
+  // etc. A real user message has no subtype; anything with one is not a prompt and
+  // can't be threaded-replied to (→ cannot_reply_to_message).
+  if (m.subtype || m.bot_id) return;
   if (!m.text?.trim()) return;
 
   // Unknown channel → ignore silently (§3).
