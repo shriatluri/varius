@@ -2,7 +2,7 @@ import { execFile } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { promisify } from 'node:util';
-import { postText } from './slack';
+import { postPrReview, postText } from './slack';
 import { Agent, ClaudeResult, RunRecord, Trigger } from './types';
 
 const execFileP = promisify(execFile);
@@ -128,6 +128,13 @@ export async function runAgent(agent: Agent, opts: RunOptions): Promise<void> {
 
     // Threaded replies for inbound, top-level for scheduled (§9).
     await postText(agent.manifest.channel, result.result, trigger === 'slack' ? threadTs : undefined);
+
+    // Coding agents (manifest opt-in): a reply containing a PR link gets
+    // Merge/Deny buttons. Clicks land in bridge.ts — merging stays human.
+    if (agent.manifest.prReview) {
+      const prUrl = result.result.match(/https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/pull\/\d+/)?.[0];
+      if (prUrl) await postPrReview(agent.manifest.channel, prUrl, trigger === 'slack' ? threadTs : undefined);
+    }
 
     appendRun({
       ts: new Date(started).toISOString(),

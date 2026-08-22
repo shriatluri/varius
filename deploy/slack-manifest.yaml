@@ -20,6 +20,8 @@ oauth_config:
       - groups:history      # read messages in private channels (future)
       - app_mentions:read
 settings:
+  interactivity:
+    is_enabled: true        # Merge/Deny buttons (bridge pr_merge/pr_deny actions)
   event_subscriptions:
     bot_events:
       - message.channels    # inbound from public channels

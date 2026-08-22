@@ -20,6 +20,8 @@ export interface AgentManifest {
   allowedTools: string[];
   maxTurns: number;
   timeoutSec: number;
+  /** Attach Merge/Deny buttons when a reply contains a GitHub PR URL (coding agents). */
+  prReview?: boolean;
   schedule?: AgentSchedule;
 }
 
