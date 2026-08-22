@@ -58,8 +58,15 @@ function prAction(kind: 'merge' | 'deny') {
     await ack();
     const user = body.user?.id;
     const prUrl = action.value;
+    // Fail closed: an unset OPERATOR_USER means nobody can merge, not everybody.
+    // These buttons spend the box's GitHub credential (§10) and anyone in the
+    // channel can see them.
     const operator = process.env.OPERATOR_USER;
-    if (operator && user !== operator) {
+    if (!operator) {
+      await respond({ response_type: 'ephemeral', replace_original: false, text: ':lock: `OPERATOR_USER` is unset — set it in `.env` and restart `fleet-bridge`.' });
+      return;
+    }
+    if (user !== operator) {
       await respond({ response_type: 'ephemeral', replace_original: false, text: `Only <@${operator}> can ${kind} from here.` });
       return;
     }
