@@ -16,3 +16,8 @@ by name in `src/`, the design is wrong.
   in `-p` mode unlisted tools are silently denied, not errored.
 - Never post raw stderr to Slack. One-line summary in-channel, detail in
   `journalctl`.
+- Permission rules: `Write(path)` rules are accepted but never consulted —
+  `Edit(path)` governs all file-editing tools. Compound Bash commands are
+  checked per segment.
+- The CLI blocks `cd X && git …` (hook-safety guard) even when both segments
+  are allowlisted. Agents must use `git -C <dir>` instead.
