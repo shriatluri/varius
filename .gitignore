@@ -6,3 +6,4 @@ runs.jsonl
 .env
 */repo/
 *.log
+.DS_Store
