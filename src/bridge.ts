@@ -16,6 +16,10 @@ const app = new App({
   token: process.env.SLACK_BOT_TOKEN,
   appToken: process.env.SLACK_APP_TOKEN,
   socketMode: true,
+  // Bolt drops the app's own events before any listener by default, which
+  // would swallow voice-mode posts (jarvis.py posts AS the bot). Our handler
+  // does its own bot filtering, with the varius_voice metadata exception.
+  ignoreSelf: false,
 });
 
 app.message(async ({ message }) => {
@@ -26,13 +30,17 @@ app.message(async ({ message }) => {
     text?: string;
     subtype?: string;
     bot_id?: string;
+    metadata?: { event_type?: string };
   };
 
   // Only react to plain user messages. Ignore our own/other bots (infinite loop,
   // §9) AND every system event — channel_join, channel_name (rename), message_changed,
   // etc. A real user message has no subtype; anything with one is not a prompt and
   // can't be threaded-replied to (→ cannot_reply_to_message).
-  if (m.subtype || m.bot_id) return;
+  // One exception: voice mode (scripts/jarvis.py) posts AS the bot, tagged with
+  // message metadata. Agent replies carry no such tag, so the loop guard holds.
+  const isVoice = m.metadata?.event_type === 'varius_voice';
+  if (!isVoice && (m.subtype || m.bot_id)) return;
   if (!m.text?.trim()) return;
 
   // Unknown channel → ignore silently (§3).

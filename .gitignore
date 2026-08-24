@@ -7,3 +7,6 @@ runs.jsonl
 */repo/
 *.log
 .DS_Store
+*.ppn
+scripts/.jarvis-venv/
+__pycache__/

@@ -21,3 +21,6 @@ by name in `src/`, the design is wrong.
   checked per segment.
 - The CLI blocks `cd X && git …` (hook-safety guard) even when both segments
   are allowlisted. Agents must use `git -C <dir>` instead.
+- Bolt silently drops the app's own events (`ignoreSelf`, on by default).
+  Voice mode posts as the bot, so the bridge runs `ignoreSelf: false` and
+  gates bot messages on the `varius_voice` message metadata instead.

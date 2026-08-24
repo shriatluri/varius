@@ -1,0 +1,13 @@
+# Voice mode (scripts/jarvis.py). Installed into scripts/.jarvis-venv by
+# scripts/jarvis-setup.sh — not part of the Node project.
+# NOTE: a custom .ppn wake word must be trained for the same pvporcupine
+# major version (v4 console model for pvporcupine>=4).
+pvporcupine>=4.0
+pvrecorder>=1.2.7
+faster-whisper>=1.2.1
+slack-sdk>=3.43
+numpy>=1.26
+# VAD: original webrtcvad is sdist-only/unmaintained; the -wheels fork ships
+# macOS arm64 wheels (import name is still `webrtcvad`). jarvis.py falls back
+# to RMS silence detection if this is missing.
+webrtcvad-wheels>=2.0.14
