@@ -375,6 +375,11 @@ now costs a dependency and a module for benefits we can't yet name.
   this rots.
 - **Threaded replies for inbound, top-level for scheduled.** Keeps digests
   scannable.
+- **A scheduled run may decline to post** by returning exactly `SKIP` as its
+  final message — logged as `status: "skipped"`, nothing sent to Slack. For
+  agents on a retrying timer (e.g. hourly until a wearable syncs): guard on
+  the agent's own notes file so the first successful post makes every later
+  fire that day a `SKIP`. Interactive runs always post — a person asked.
 - **Never post raw stderr to Slack.** One-line summary in-channel, full detail
   in `journalctl`.
 - **Slack has a 3000-char block limit.** Chunking lives in `slack.ts` from

@@ -126,21 +126,28 @@ export async function runAgent(agent: Agent, opts: RunOptions): Promise<void> {
 
     if (trigger === 'slack' && threadTs) writeThread(agent, threadTs, result.session_id);
 
-    // Threaded replies for inbound, top-level for scheduled (§9).
-    await postText(agent.manifest.channel, result.result, trigger === 'slack' ? threadTs : undefined);
+    // A scheduled agent may decline to post by returning exactly `SKIP` —
+    // e.g. a retrying timer whose data source hasn't updated yet. Interactive
+    // runs always post: a person asked, silence reads as breakage.
+    const skipped = trigger === 'schedule' && result.result.trim() === 'SKIP';
 
-    // Coding agents (manifest opt-in): a reply containing a PR link gets
-    // Merge/Deny buttons. Clicks land in bridge.ts — merging stays human.
-    if (agent.manifest.prReview) {
-      const prUrl = result.result.match(/https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/pull\/\d+/)?.[0];
-      if (prUrl) await postPrReview(agent.manifest.channel, prUrl, trigger === 'slack' ? threadTs : undefined);
+    if (!skipped) {
+      // Threaded replies for inbound, top-level for scheduled (§9).
+      await postText(agent.manifest.channel, result.result, trigger === 'slack' ? threadTs : undefined);
+
+      // Coding agents (manifest opt-in): a reply containing a PR link gets
+      // Merge/Deny buttons. Clicks land in bridge.ts — merging stays human.
+      if (agent.manifest.prReview) {
+        const prUrl = result.result.match(/https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/pull\/\d+/)?.[0];
+        if (prUrl) await postPrReview(agent.manifest.channel, prUrl, trigger === 'slack' ? threadTs : undefined);
+      }
     }
 
     appendRun({
       ts: new Date(started).toISOString(),
       agent: agent.manifest.id,
       trigger,
-      status: 'ok',
+      status: skipped ? 'skipped' : 'ok',
       cost_usd: result.total_cost_usd,
       turns: result.num_turns,
       ms: Date.now() - started,
