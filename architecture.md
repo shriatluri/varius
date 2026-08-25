@@ -375,8 +375,11 @@ now costs a dependency and a module for benefits we can't yet name.
   this rots.
 - **Threaded replies for inbound, top-level for scheduled.** Keeps digests
   scannable.
-- **A scheduled run may decline to post** by returning exactly `SKIP` as its
-  final message — logged as `status: "skipped"`, nothing sent to Slack. For
+- **A scheduled run may decline to post** by ending its final message with a
+  line that is exactly `SKIP` — logged as `status: "skipped"`, nothing sent
+  to Slack. (Final-line match, not whole-message: models can't be trusted to
+  say nothing else. An agent using the sentinel must never write the word in
+  a real post.) For
   agents on a retrying timer (e.g. hourly until a wearable syncs): guard on
   the agent's own notes file so the first successful post makes every later
   fire that day a `SKIP`. Interactive runs always post — a person asked.
