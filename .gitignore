@@ -7,5 +7,10 @@ runs.jsonl
 */repo/
 *.log
 .DS_Store
+*.ppn
+scripts/*.onnx
+scripts/.jarvis-venv/
+__pycache__/
+.vscode/
 credentials.md
 */repos/

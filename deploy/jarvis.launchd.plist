@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Voice mode as an always-on launchd agent (LOCAL MAC, not the VPS — the
+     mic lives here). Install:
+       sed "s|__ROOT__|$HOME/varius|" deploy/jarvis.launchd.plist \
+         > ~/Library/LaunchAgents/com.varius.jarvis.plist
+       launchctl load ~/Library/LaunchAgents/com.varius.jarvis.plist
+     Logs: /tmp/varius-jarvis.log. Grant mic access to the terminal/python on
+     first run. Unload with launchctl unload. -->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.varius.jarvis</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>__ROOT__/scripts/jarvis.sh</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>__ROOT__</string>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>StandardOutPath</key>
+  <string>/tmp/varius-jarvis.log</string>
+  <key>StandardErrorPath</key>
+  <string>/tmp/varius-jarvis.log</string>
+</dict>
+</plist>
