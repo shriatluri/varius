@@ -126,10 +126,13 @@ export async function runAgent(agent: Agent, opts: RunOptions): Promise<void> {
 
     if (trigger === 'slack' && threadTs) writeThread(agent, threadTs, result.session_id);
 
-    // A scheduled agent may decline to post by returning exactly `SKIP` —
-    // e.g. a retrying timer whose data source hasn't updated yet. Interactive
-    // runs always post: a person asked, silence reads as breakage.
-    const skipped = trigger === 'schedule' && result.result.trim() === 'SKIP';
+    // A scheduled agent may decline to post by ending its reply with a line
+    // that is exactly `SKIP` — e.g. a retrying timer whose data source hasn't
+    // updated yet. Matched on the final line (models reliably *end* with the
+    // sentinel but can't be trusted to say nothing else); agent personas must
+    // never use the word in a real post. Interactive runs always post: a
+    // person asked, silence reads as breakage.
+    const skipped = trigger === 'schedule' && /(^|\n)\s*[`*_~]*SKIP[`*_~]*\s*$/.test(result.result.trim());
 
     if (!skipped) {
       // Threaded replies for inbound, top-level for scheduled (§9).
