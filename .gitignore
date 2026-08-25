@@ -8,3 +8,4 @@ runs.jsonl
 *.log
 .DS_Store
 credentials.md
+*/repos/
