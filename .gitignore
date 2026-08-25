@@ -12,3 +12,5 @@ scripts/*.onnx
 scripts/.jarvis-venv/
 __pycache__/
 .vscode/
+credentials.md
+*/repos/
