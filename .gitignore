@@ -8,5 +8,6 @@ runs.jsonl
 *.log
 .DS_Store
 *.ppn
+scripts/*.onnx
 scripts/.jarvis-venv/
 __pycache__/

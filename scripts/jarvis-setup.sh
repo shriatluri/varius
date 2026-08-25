@@ -11,20 +11,22 @@ python3 -m venv "$venv"
 "$venv/bin/pip" install --quiet -r "$root/scripts/jarvis-requirements.txt"
 
 model="${JARVIS_WHISPER_MODEL:-base.en}"
-echo "prefetching whisper model '$model' (one-time download)…"
+echo "prefetching whisper + wake-word models (one-time download)…"
 "$venv/bin/python" - "$model" <<'EOF'
 import sys
 from faster_whisper import WhisperModel
 WhisperModel(sys.argv[1], device="cpu", compute_type="int8")
-print("model cached.")
+import openwakeword.utils
+openwakeword.utils.download_models()
+print("models cached.")
 EOF
 
 cat <<EOF
 
-Setup done. Next:
-  1. .env: set PICOVOICE_ACCESS_KEY (free key: console.picovoice.ai)
-     Optional: JARVIS_KEYWORD_PATH=scripts/varius.ppn  JARVIS_DEFAULT_AGENT=research
-  2. Smoke test without a mic:   scripts/jarvis.sh --text "research say hi" --no-tts
-  3. Live:                       scripts/jarvis.sh          (grant mic access when asked)
+Setup done — no accounts or keys needed. Next:
+  1. Smoke test without a mic:   scripts/jarvis.sh --text "research say hi" --no-tts
+  2. Live ("hey jarvis"):        scripts/jarvis.sh          (grant mic access when asked)
+  3. Custom "varius" wake word:  train a .onnx (docs/VOICE.md), then
+                                 JARVIS_WAKEWORD=scripts/varius.onnx in .env
   4. Always-on: see docs/VOICE.md for the launchd install.
 EOF

@@ -6,44 +6,46 @@ third *input* that posts a Slack message (architecture.md invariant 2 holds).
 Runs on the **local Mac** (the mic lives here), not the VPS. Tracking: SHRI-13.
 
 ```
-mic → Porcupine wake word → VAD capture → faster-whisper (local)
+mic → openWakeWord (on-device) → VAD capture → faster-whisper (local)
     → post to #<agent> via bot token → bridge/runner answer → `say` reads it
 ```
 
-Privacy: everything before the wake word stays on-device; transcription is
-local. The only network traffic is the Slack message itself.
+No accounts or keys beyond the existing Slack bot token. Everything before
+the Slack post runs on-device; the wake word is `hey jarvis` (pretrained)
+until a custom `varius` model is dropped in.
 
 ## Setup
 
 ```bash
-scripts/jarvis-setup.sh          # venv + deps + whisper model prefetch
+scripts/jarvis-setup.sh          # venv + deps + whisper/wake models prefetch
 ```
 
-Then in `.env` (see `.env.example`):
+Optional `.env` overrides (see `.env.example`):
 
 | Var | What |
 |---|---|
-| `PICOVOICE_ACCESS_KEY` | free key from console.picovoice.ai — required for listening |
-| `JARVIS_KEYWORD` | stock wake word (default `jarvis`) |
-| `JARVIS_KEYWORD_PATH` | custom `.ppn` (e.g. `scripts/varius.ppn`) — overrides the stock word |
+| `JARVIS_WAKEWORD` | pretrained name (default `hey_jarvis`) or path to a custom `.onnx` |
+| `JARVIS_WAKE_THRESHOLD` | 0–1 detection score (default `0.5`; raise if it false-triggers) |
 | `JARVIS_DEFAULT_AGENT` | where unrouted speech goes (default `research`) |
 | `JARVIS_WHISPER_MODEL` | `base.en` default; `tiny.en` faster, `small.en` more accurate |
+| `JARVIS_REPLY_TIMEOUT` | cap reply wait in seconds (default: the agent's own timeout) |
 
-Custom "varius" wake word: train it at console.picovoice.ai (Porcupine →
-"varius" → macOS arm64), download the `.ppn` **for pvporcupine's installed
-major version (v4)**, drop it at `scripts/varius.ppn` (gitignored), set
-`JARVIS_KEYWORD_PATH=scripts/varius.ppn`.
+Custom "varius" wake word: openWakeWord models are trained for free in their
+Colab notebook (github.com/dscripka/openWakeWord → "training new models" —
+synthetic speech, ~an hour, no account). Save the result as
+`scripts/varius.onnx` (gitignored) and set `JARVIS_WAKEWORD=scripts/varius.onnx`.
 
 ## Use
 
 ```bash
 scripts/jarvis.sh --list-agents                        # what's routable
-scripts/jarvis.sh --text "research say hi" --no-tts    # no mic/key smoke test
+scripts/jarvis.sh --text "research say hi" --no-tts    # mic-free smoke test
+scripts/jarvis.sh --wake-test clip.wav                 # peak wake score for a wav
 scripts/jarvis.sh --once                               # one wake cycle
 scripts/jarvis.sh                                      # listen forever
 ```
 
-Routing: first word (or "ask/tell &lt;agent&gt;") names the agent — "varius,
+Routing: first word (or "ask/tell &lt;agent&gt;") names the agent — "hey jarvis,
 research what changed in node 22" → `#research`. No agent named → the default.
 Agents are discovered from `agents/*/agent.json` (interactive only), same as
 the registry — a new agent folder is voice-routable with zero code.
@@ -57,3 +59,6 @@ Always-on: `deploy/jarvis.launchd.plist` (install instructions inside it).
 - Long replies: speaks the first ~700 chars, then "full reply is in Slack".
 - `webrtcvad-wheels` provides VAD; if absent, falls back to RMS silence
   detection (works, slightly worse in noisy rooms).
+- The bridge accepts jarvis's bot-authored posts only via the `varius_voice`
+  message-metadata tag (`ignoreSelf: false` in `src/bridge.ts`); agent replies
+  carry no tag, so they can't loop.

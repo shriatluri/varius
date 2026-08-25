@@ -1,9 +1,8 @@
 # Voice mode (scripts/jarvis.py). Installed into scripts/.jarvis-venv by
 # scripts/jarvis-setup.sh — not part of the Node project.
-# NOTE: a custom .ppn wake word must be trained for the same pvporcupine
-# major version (v4 console model for pvporcupine>=4).
-pvporcupine>=4.0
-pvrecorder>=1.2.7
+openwakeword>=0.6
+onnxruntime>=1.17          # openwakeword inference backend (macOS arm64 wheels)
+sounddevice>=0.4.6         # mic capture (PortAudio; ships wheels)
 faster-whisper>=1.2.1
 slack-sdk>=3.43
 numpy>=1.26

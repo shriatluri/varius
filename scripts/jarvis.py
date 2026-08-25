@@ -1,20 +1,22 @@
 #!/usr/bin/env python3
 """Voice mode (SHRI-13): always-listening front-end for the fleet.
 
-Wake word ("jarvis" stock, or a custom "varius" .ppn) -> record until silence
--> transcribe locally (faster-whisper) -> route to an agent's Slack channel
--> the existing bridge/runner answer -> reply is read aloud.
+Wake word (openWakeWord — stock "hey jarvis", or a custom "varius" .onnx)
+-> record until silence -> transcribe locally (faster-whisper) -> route to an
+agent's Slack channel -> the existing bridge/runner answer -> reply read aloud.
 
 The bridge stays the hub: this script only posts a Slack message and reads
 the threaded reply back. No new execution path (architecture.md invariant 2).
 
-Nothing leaves the machine before the wake word fires; transcription is local.
+Everything runs on-device (no accounts, no keys beyond the Slack bot token);
+nothing leaves the machine except the Slack message itself.
 
-Debug modes (no mic, no Picovoice key needed):
+Debug modes (no mic needed):
   jarvis.py --list-agents
   jarvis.py --text "research what changed in node 22" [--no-tts]
+  jarvis.py --wake-test clip.wav     # peak wake score for a 16k mono wav
 
-Live modes (need PICOVOICE_ACCESS_KEY in .env, mic permission):
+Live modes (mic permission on first run):
   jarvis.py            # listen forever
   jarvis.py --once     # one wake cycle, then exit
 """
@@ -197,29 +199,30 @@ def dispatch(transcript: str, agents: dict[str, dict], fleet: SlackFleet,
 
 # ---------------------------------------------------------------------------
 # Audio path — imported lazily so --text/--list-agents work without any of
-# pvporcupine / pvrecorder / faster-whisper installed.
+# openwakeword / sounddevice / faster-whisper installed.
 # ---------------------------------------------------------------------------
 
-class Listener:
-    def __init__(self, access_key: str, keyword: str, keyword_path: str | None,
-                 whisper_model: str):
-        import pvporcupine
-        from pvrecorder import PvRecorder
+WAKE_FRAME = 1280  # 80 ms @ 16 kHz — openWakeWord's expected chunk size
 
-        if keyword_path:
-            self.porcupine = pvporcupine.create(
-                access_key=access_key, keyword_paths=[keyword_path])
-            self.keyword_name = Path(keyword_path).stem
-        else:
-            self.porcupine = pvporcupine.create(
-                access_key=access_key, keywords=[keyword])
-            self.keyword_name = keyword
-        assert self.porcupine.sample_rate == SAMPLE_RATE
-        self.recorder = PvRecorder(
-            frame_length=self.porcupine.frame_length, device_index=-1)
+
+class Listener:
+    def __init__(self, wakeword: str, threshold: float, whisper_model: str):
+        from openwakeword.model import Model as WakeModel
+
+        # `wakeword` is a pretrained model name (hey_jarvis) or a path to a
+        # custom .onnx (e.g. scripts/varius.onnx). Feature models are fetched
+        # by jarvis-setup.sh via openwakeword.utils.download_models().
+        self.model = WakeModel(wakeword_models=[wakeword], inference_framework="onnx")
+        self.key = next(iter(self.model.models))
+        self.keyword_name = Path(wakeword).stem if wakeword.endswith(".onnx") else wakeword
+        self.threshold = threshold
         self._vad = self._make_vad()
         self._whisper_model_name = whisper_model
         self._whisper = None  # loaded on first use (model download can be slow)
+
+    def score(self, frame) -> float:
+        """Wake score for one int16 numpy frame (WAKE_FRAME samples)."""
+        return float(self.model.predict(frame)[self.key])
 
     @staticmethod
     def _make_vad():
@@ -254,7 +257,7 @@ class Listener:
         segments, _info = self._whisper.transcribe(audio, language="en", beam_size=1)
         return " ".join(s.text.strip() for s in segments).strip()
 
-    def _capture_utterance(self) -> list[int]:
+    def _capture_utterance(self, stream) -> list[int]:
         """Record after the wake word until trailing silence (or the cap)."""
         vad_frame = int(SAMPLE_RATE * 0.03)  # 480 samples / 30 ms
         buf: list[int] = []
@@ -263,7 +266,8 @@ class Listener:
         silence_ms = 0
         start = time.monotonic()
         while time.monotonic() - start < MAX_UTTERANCE_SEC:
-            pending.extend(self.recorder.read())
+            block, _overflow = stream.read(WAKE_FRAME)
+            pending.extend(int(s) for s in block[:, 0])
             while len(pending) >= vad_frame:
                 frame, pending = pending[:vad_frame], pending[vad_frame:]
                 buf.extend(frame)
@@ -278,16 +282,22 @@ class Listener:
         return buf if speech_ms >= MIN_SPEECH_SEC * 1000 else []
 
     def run(self, on_transcript, once: bool, no_tts: bool) -> None:
+        import sounddevice as sd
+
         chime = "/System/Library/Sounds/Pop.aiff"
-        self.recorder.start()
-        log(f"listening for '{self.keyword_name}' (mic: {self.recorder.selected_device})")
-        try:
+        with sd.InputStream(samplerate=SAMPLE_RATE, channels=1, dtype="int16",
+                            blocksize=WAKE_FRAME) as stream:
+            log(f"listening for '{self.keyword_name}' "
+                f"(mic: {sd.query_devices(kind='input')['name']}, "
+                f"threshold {self.threshold})")
             while True:
-                if self.porcupine.process(self.recorder.read()) < 0:
+                block, _overflow = stream.read(WAKE_FRAME)
+                if self.score(block[:, 0]) < self.threshold:
                     continue
                 log("wake word — capturing")
                 subprocess.run(["afplay", chime], check=False)
-                pcm = self._capture_utterance()
+                pcm = self._capture_utterance(stream)
+                self.model.reset()  # don't retrigger on the same audio
                 if not pcm:
                     log("no speech captured")
                     continue
@@ -299,10 +309,6 @@ class Listener:
                 on_transcript(transcript)
                 if once:
                     return
-        finally:
-            self.recorder.stop()
-            self.recorder.delete()
-            self.porcupine.delete()
 
 
 def main() -> int:
@@ -311,6 +317,8 @@ def main() -> int:
     parser.add_argument("--list-agents", action="store_true")
     parser.add_argument("--once", action="store_true", help="one wake cycle, then exit")
     parser.add_argument("--no-tts", action="store_true", help="print instead of speaking")
+    parser.add_argument("--wake-test", metavar="WAV",
+                        help="print the peak wake score for a 16 kHz mono int16 wav")
     args = parser.parse_args()
 
     load_dotenv(ROOT / ".env")
@@ -319,6 +327,30 @@ def main() -> int:
     if args.list_agents:
         for aid, m in agents.items():
             print(f"{aid}\t{m['channel']}\t{m.get('name', '')}")
+        return 0
+
+    listener_cfg = dict(
+        wakeword=os.environ.get("JARVIS_WAKEWORD", "hey_jarvis"),
+        threshold=float(os.environ.get("JARVIS_WAKE_THRESHOLD", "0.5")),
+        whisper_model=os.environ.get("JARVIS_WHISPER_MODEL", "base.en"),
+    )
+
+    if args.wake_test:
+        import wave
+
+        import numpy as np
+
+        listener = Listener(**listener_cfg)
+        with wave.open(args.wake_test, "rb") as w:
+            assert w.getframerate() == SAMPLE_RATE and w.getnchannels() == 1, \
+                "wav must be 16 kHz mono (afconvert -f WAVE -d LEI16@16000 -c 1 in out.wav)"
+            pcm = np.frombuffer(w.readframes(w.getnframes()), dtype=np.int16)
+        peak = max(
+            listener.score(pcm[i:i + WAKE_FRAME])
+            for i in range(0, len(pcm) - WAKE_FRAME, WAKE_FRAME)
+        )
+        print(f"peak wake score for '{listener.keyword_name}': {peak:.3f} "
+              f"(threshold {listener.threshold})")
         return 0
 
     default_agent = os.environ.get("JARVIS_DEFAULT_AGENT", "research")
@@ -332,17 +364,7 @@ def main() -> int:
         dispatch(args.text, agents, fleet, default_agent, args.no_tts)
         return 0
 
-    access_key = os.environ.get("PICOVOICE_ACCESS_KEY", "")
-    if not access_key:
-        log("PICOVOICE_ACCESS_KEY missing — see docs/VOICE.md (free account at "
-            "console.picovoice.ai). Meanwhile, --text works without it.")
-        return 1
-    listener = Listener(
-        access_key=access_key,
-        keyword=os.environ.get("JARVIS_KEYWORD", "jarvis"),
-        keyword_path=os.environ.get("JARVIS_KEYWORD_PATH") or None,
-        whisper_model=os.environ.get("JARVIS_WHISPER_MODEL", "base.en"),
-    )
+    listener = Listener(**listener_cfg)
     listener.run(
         lambda t: dispatch(t, agents, fleet, default_agent, args.no_tts),
         once=args.once, no_tts=args.no_tts,
