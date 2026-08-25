@@ -7,3 +7,4 @@ runs.jsonl
 */repo/
 *.log
 .DS_Store
+credentials.md
