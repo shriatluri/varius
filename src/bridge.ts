@@ -22,7 +22,7 @@ const app = new App({
   ignoreSelf: false,
 });
 
-app.message(async ({ message }) => {
+app.message(async ({ message, client }) => {
   const m = message as {
     channel: string;
     ts: string;
@@ -46,6 +46,14 @@ app.message(async ({ message }) => {
   // Unknown channel → ignore silently (§3).
   const agent = registry.byChannel(m.channel);
   if (!agent || !agent.manifest.interactive) return;
+
+  // 👀 the instant the message is routed — the run itself can take minutes.
+  // Best-effort: a missing reactions:write scope must never block the run.
+  try {
+    await client.reactions.add({ channel: m.channel, timestamp: m.ts, name: 'eyes' });
+  } catch (err) {
+    console.error('seen-reaction failed (reactions:write scope missing?):', err);
+  }
 
   // A top-level message starts a thread keyed by its own ts.
   const threadTs = m.thread_ts ?? m.ts;

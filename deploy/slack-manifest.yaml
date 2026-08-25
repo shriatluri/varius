@@ -16,6 +16,7 @@ oauth_config:
   scopes:
     bot:
       - chat:write          # post digests and replies
+      - reactions:write     # 👀 acknowledgement on inbound messages
       - channels:history    # read messages in public fleet channels
       - groups:history      # read messages in private channels (future)
       - app_mentions:read
