@@ -1,0 +1,14 @@
+{
+  "id": "journal",
+  "name": "Journal",
+  "channel": "C_REPLACE_ME",
+  "model": "sonnet",
+  "interactive": true,
+  "allowedTools": ["Read", "Write", "Edit"],
+  "maxTurns": 30,
+  "timeoutSec": 900,
+  "schedule": {
+    "prompt": "prompts/weekly.md",
+    "onCalendar": "Sun *-*-* 20:00:00"
+  }
+}
