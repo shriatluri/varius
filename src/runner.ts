@@ -39,6 +39,20 @@ function writeThread(agent: Agent, threadTs: string, sessionId: string): void {
   fs.writeFileSync(threadsPath(agent), JSON.stringify(threads, null, 2) + '\n');
 }
 
+// Relative path-scoped rules anchor to the session's *current* cwd, and a
+// persisted `cd` (allowed by e.g. `Bash(cd *)`) silently re-anchors them —
+// after `cd repos/website`, `Edit(repos/**)` means `repos/website/repos/**`
+// and every edit is denied. Pin file rules to the agent dir at spawn time
+// (`//` is the absolute-path rule syntax); manifests stay portable across
+// boxes. Bash/MCP rules aren't paths and pass through untouched.
+const FILE_RULE = /^(Read|Edit|Write|Glob|Grep)\((?![/~])([^)]+)\)$/;
+function absolutizeRules(agent: Agent, rules: string[]): string[] {
+  return rules.map((rule) => {
+    const match = rule.match(FILE_RULE);
+    return match ? `${match[1]}(/${path.resolve(agent.dir, match[2])})` : rule;
+  });
+}
+
 function claudeArgs(agent: Agent, prompt: string, resumeSessionId?: string): string[] {
   const m = agent.manifest;
   const args = [
@@ -47,7 +61,7 @@ function claudeArgs(agent: Agent, prompt: string, resumeSessionId?: string): str
     '--model', m.model,
     '--max-turns', String(m.maxTurns),
   ];
-  if (m.allowedTools.length > 0) args.push('--allowedTools', ...m.allowedTools);
+  if (m.allowedTools.length > 0) args.push('--allowedTools', ...absolutizeRules(agent, m.allowedTools));
 
   // Scope MCP per agent (§5). Without --strict-mcp-config, `claude -p` inherits
   // the operator's global MCP servers (Slack, Notion, …) — a context-budget leak
