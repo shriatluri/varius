@@ -19,6 +19,10 @@ by name in `src/`, the design is wrong.
 - Permission rules: `Write(path)` rules are accepted but never consulted —
   `Edit(path)` governs all file-editing tools. Compound Bash commands are
   checked per segment.
+- Relative path rules anchor to the session's *current* cwd — a persisted
+  `cd` (via `Bash(cd *)`) silently re-anchors them and every file rule stops
+  matching. The runner absolutizes file rules against the agent dir at spawn
+  time; keep manifest rules relative so folders stay portable across boxes.
 - The CLI blocks `cd X && git …` (hook-safety guard) even when both segments
   are allowlisted. Agents must use `git -C <dir>` instead.
 - Bolt silently drops the app's own events (`ignoreSelf`, on by default).
