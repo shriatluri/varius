@@ -1,0 +1,14 @@
+{
+  "id": "media",
+  "name": "Media Desk",
+  "channel": "C_REPLACE_ME",
+  "model": "sonnet",
+  "interactive": false,
+  "allowedTools": ["Read", "Write", "WebSearch", "WebFetch"],
+  "maxTurns": 30,
+  "timeoutSec": 900,
+  "schedule": {
+    "prompt": "prompts/weekly.md",
+    "onCalendar": "Sun *-*-* 09:00:00"
+  }
+}
