@@ -1,0 +1,8 @@
+# /etc/systemd/system/fleet-watchdog.service — oneshot, fired by the timer.
+# Runs as root: it must read the journal and restart fleet-bridge.
+[Unit]
+Description=Fleet bridge watchdog (restart on zombie Socket Mode connection)
+
+[Service]
+Type=oneshot
+ExecStart=/srv/fleet/scripts/watchdog.sh

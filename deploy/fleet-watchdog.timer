@@ -1,0 +1,10 @@
+# /etc/systemd/system/fleet-watchdog.timer
+[Unit]
+Description=Run the fleet bridge watchdog every 5 minutes
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=5min
+
+[Install]
+WantedBy=timers.target

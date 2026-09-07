@@ -75,6 +75,11 @@ the box can't clone. Push to it instead:
       today instead of debugging a silent failure at 07:00
 - [x] `sudo systemctl enable --now fleet-bridge` — after this, never run
       `npm run bridge` on a laptop too: two bridges answer every message
+- [ ] Watchdog: `sudo cp deploy/fleet-watchdog.service
+      deploy/fleet-watchdog.timer /etc/systemd/system/ && sudo systemctl
+      daemon-reload && sudo systemctl enable --now fleet-watchdog.timer` —
+      restarts the bridge when Socket Mode zombifies (pong-timeout spam
+      with the unit still green; seen twice in week one)
 
 ## 6. Coding agent (slice 6)
 
