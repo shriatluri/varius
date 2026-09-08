@@ -73,7 +73,7 @@ sudo systemctl enable --now fleet-bridge   # interactive agents
 
 Each agent fires on its manifest's `onCalendar`; every run appends to
 `runs.jsonl` (`scripts/rollup.sh` for a weekly cost summary). Failures post a
-one-liner to the agent's channel and `#ag-ops`.
+one-liner to the agent's channel and `#ops`.
 
 ## Docs
 
