@@ -117,7 +117,8 @@ file, the result is posted as a **new top-level message**, and the session is
 ├── deploy/
 │   ├── fleet-bridge.service
 │   ├── fleet-agent@.service    templated, takes agent id
-│   └── fleet-agent@.timer      OnCalendar comes from per-instance drop-ins
+│   ├── fleet-agent@.timer      OnCalendar comes from per-instance drop-ins
+│   └── fleet-watchdog.*        restart the bridge if Socket Mode zombifies
 ├── agents/                 ← gitignored except _examples/
 │   ├── _examples/          committed reference agents
 │   ├── news/
@@ -142,7 +143,7 @@ agents/*
 !agents/_examples/**
 runs.jsonl
 .env
-*/repo/          # coding-agent checkouts — nested git, keep out
+*/repos/         # coding-agent checkouts — nested git, keep out
 ```
 
 Anyone cloning gets working code plus example agents, and none of your
@@ -403,7 +404,7 @@ This box holds a GitHub credential and a Claude OAuth token. Treat it like it.
 - `allowedTools` is per-agent and minimal:
   - news / research / guru → `Read`, `Write`, `WebSearch`, `WebFetch`
   - coding agent → adds `Edit`, `Bash`, scoped via permission syntax, and only
-    inside its own `repo/`
+    inside its own `repos/`
 - `Bash(*)` does not mean what it looks like — read the permissions syntax in
   the settings reference before writing an allowlist.
 - SSH key auth only, password auth off, UFW default-deny inbound. Socket Mode
