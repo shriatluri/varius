@@ -2,6 +2,8 @@
 
 **Your agents, your context, 24/7.**
 
+[shriatluri.github.io/varius](https://shriatluri.github.io/varius/)
+
 A personal fleet of Claude Code agents on a single VPS. Each agent is a folder
 with its own instructions, tools, and Slack channel. Scheduled agents push
 digests while you sleep; interactive agents answer when you message their
