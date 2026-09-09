@@ -182,7 +182,6 @@
         <div class="feed-line"><span class="t-time">07:00</span>  <span class="t-chan">#news</span>     Anthropic's IPO and the infra land-grab, 7 stories <span class="t-dim">· sources linked</span></div>
         <div class="feed-line"><span class="t-time">07:00</span>  <span class="t-chan">#journal</span>  Today: Tue Sep 9 · 4 to-dos, one rolled over 3 days</div>
         <div class="feed-line"><span class="t-time">07:15</span>  <span class="t-chan">#projx</span>    PR ready: fix mobile view. Branch pushed, awaiting your merge</div>
-        <div class="feed-line"><span class="t-dim">nobody sent these. the fleet did.</span></div>
       </div>
     </div>
   </header>
@@ -190,7 +189,7 @@
   <section id="what">
     <p class="eyebrow">what it is</p>
     <div class="prose">
-      <p>Each job gets its own agent; each agent is just a folder with durable, scoped context and a Slack channel. Timers push digests while you sleep; replying in a channel talks to that agent. <strong>No platform, no database. A few hundred lines of TypeScript and systemd on a box you own.</strong></p>
+      <p>Each job gets its own agent; each agent is just a folder with durable, scoped context and a Slack channel. Timers push digests while you sleep and replying in a channel talks to that agent. <strong>No platform, No database, No dashboard</strong></p>
     </div>
     <pre aria-label="Architecture diagram">Slack message ──▶ <span class="a">┌────────┐</span>
  <span class="c">(Socket Mode)</span>    <span class="a">│ runner │</span> ──▶ claude -p ──▶ posts to Slack
