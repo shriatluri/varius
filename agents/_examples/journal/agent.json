@@ -7,6 +7,11 @@
   "allowedTools": ["Read", "Write", "Edit"],
   "maxTurns": 30,
   "timeoutSec": 900,
+  "context": {
+    "read": ["self"],
+    "write": ["self"],
+    "budget": { "tokens": 2000 }
+  },
   "schedule": {
     "prompt": "prompts/morning.md",
     "onCalendar": "*-*-* 07:00:00"

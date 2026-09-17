@@ -35,6 +35,13 @@ by name in `src/`, the design is wrong.
 - SIGHUP does not hot-reload the bridge: it kills the `npx` wrapper and
   `Restart=always` brings it back in ~5s with a fresh registry. "Reload" is a
   brief restart in practice; fine at this scale.
+- The context layer (`src/context/`, docs/CONTEXT.md) is opt-in per manifest.
+  `context/index.db` is derived: delete it and `scripts/reindex.sh` rebuilds
+  it from the markdown. Never treat it as a source of truth, and never let an
+  index failure fail a run.
+- `better-sqlite3` is a native module built against the box's Node. It is
+  pinned to the v11 line because v12+ requires Node 22 and the box runs
+  Node 20 — a `npm install` that jumps the major segfaults at require time.
 - Deploying to the VPS is `git push vps main` (`/srv/fleet` has
   `receive.denyCurrentBranch=updateInstead`). Agent folders and `.env` are
   gitignored and travel by hand — see docs/SETUP.md §3.

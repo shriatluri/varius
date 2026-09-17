@@ -1,5 +1,6 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { SCOPE_RE } from './context/scopes';
 import { Agent, AgentManifest } from './types';
 
 const AGENTS_ROOT = path.resolve(__dirname, '..', 'agents');
@@ -14,6 +15,20 @@ function validate(manifest: AgentManifest, dir: string): string | null {
   if (!Array.isArray(manifest.allowedTools)) return `allowedTools must be an array`;
   if (!Number.isInteger(manifest.maxTurns) || manifest.maxTurns < 1) return `maxTurns required`;
   if (!Number.isInteger(manifest.timeoutSec) || manifest.timeoutSec < 1) return `timeoutSec required`;
+  if (manifest.context) {
+    const { read, write, budget } = manifest.context;
+    if (!Array.isArray(read) || read.length === 0) return `context.read must be a non-empty array`;
+    if (write !== undefined && !Array.isArray(write)) return `context.write must be an array`;
+    for (const scope of [...read, ...(write ?? [])]) {
+      if (typeof scope !== 'string' || !SCOPE_RE.test(scope)) return `bad context scope "${scope}"`;
+    }
+    // Overlap is read-only: an agent may write its own folder or a shared
+    // file, never another agent's notes.
+    for (const scope of write ?? []) {
+      if (scope !== 'self' && !scope.startsWith('shared/')) return `context.write "${scope}" must be self or shared/*`;
+    }
+    if (budget && (!Number.isInteger(budget.tokens) || budget.tokens < 1)) return `context.budget.tokens must be a positive integer`;
+  }
   if (manifest.schedule && !fs.existsSync(path.join(dir, manifest.schedule.prompt)))
     return `schedule.prompt "${manifest.schedule.prompt}" not found`;
   if (!fs.existsSync(path.join(dir, 'CLAUDE.md'))) return `CLAUDE.md missing`;
