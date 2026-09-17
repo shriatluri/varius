@@ -81,7 +81,23 @@ the box can't clone. Push to it instead:
       restarts the bridge when Socket Mode zombifies (pong-timeout spam
       with the unit still green; seen twice in week one)
 
-## 6. Coding agent (slice 6)
+## 6. Context layer
+
+Only needed for agents with a `context` block (docs/CONTEXT.md).
+
+- [ ] `npm ci` pulls `better-sqlite3`, a native module: it takes a prebuilt
+      binary when one matches the box's Node, and otherwise compiles — the
+      minimal image needs `build-essential` and `python3` for that. Node 20
+      pins it to the v11 line (v12+ requires Node 22)
+- [ ] Embedding key into `.env` (`OPENAI_API_KEY` or `VOYAGE_API_KEY`).
+      Optional: with neither, retrieval runs lexical-only
+- [ ] Cold start the index: `scripts/reindex.sh`, then
+      `npm run context -- stats` to confirm chunks per scope
+- [ ] `context/` is gitignored and does not travel on `git push vps main` —
+      the index rebuilds itself; shared notes are copied by hand like
+      `agents/*`
+
+## 7. Coding agent (slice 6)
 
 - [x] Install `gh` (official apt repo; not in the minimal image), then
       `gh auth login --web` as `fleet` + `gh auth setup-git`

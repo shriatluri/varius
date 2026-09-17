@@ -3,6 +3,8 @@ agents/*
 !agents/_examples/
 !agents/_examples/**
 runs.jsonl
+context/index.db*
+context/shared/
 .env
 */repo/
 *.log

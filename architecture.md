@@ -31,12 +31,15 @@ a refactor.
    written explicitly
    while the agent still has full fidelity — never reconstructed later by
    summarizing a transcript. See §7.
+   Retrieval over those notes is a derived index (§7.1) — markdown stays the
+   source of truth, and deleting the index changes nothing but recall.
 4. **The channel is the conversation.** One Slack channel maps to exactly one
    agent.
 5. **Context window is a budget.** Tools *and* MCP servers are allowlisted per
    agent. An agent that doesn't need Notion doesn't load Notion.
 6. **No database until something forces one.** Flat files until concurrency or
-   query complexity actually breaks them. See §8.
+   query complexity actually breaks them. Ranked hybrid retrieval was the
+   forcing case; the SQLite index it needs holds *no* source of truth. See §8.
 
 ---
 
@@ -113,7 +116,17 @@ file, the result is posted as a **new top-level message**, and the session is
 │   ├── slack.ts            chat.postMessage wrapper
 │   ├── registry.ts         scan agents/, validate manifests, hold in memory
 │   ├── cli.ts              npm run post / npm run agent entrypoints
-│   └── types.ts            AgentManifest, RunRecord
+│   ├── types.ts            AgentManifest, RunRecord
+│   └── context/            the context layer (§7.1, docs/CONTEXT.md)
+│       ├── chunk.ts        markdown → heading sections
+│       ├── indexer.ts      incremental reindex
+│       ├── embed.ts        pluggable embedding provider (optional)
+│       ├── search.ts       BM25 + vectors, RRF, token budget
+│       ├── store.ts        SQLite schema — derived index only
+│       ├── scopes.ts       self / <agent-id> / shared/<topic>
+│       ├── mcp.ts          manifest → MCP config for a run
+│       ├── server.ts       the MCP server agents actually call
+│       └── cli.ts          npm run context -- reindex | search | stats
 ├── deploy/
 │   ├── fleet-bridge.service
 │   ├── fleet-agent@.service    templated, takes agent id
@@ -125,15 +138,20 @@ file, the result is posted as a **new top-level message**, and the session is
 │   ├── research/
 │   ├── guru/
 │   └── projx/
+├── context/                ← gitignored
+│   ├── index.db            derived retrieval index, rebuildable (§7.1)
+│   └── shared/             cross-agent markdown, hand-prunable
 ├── docs/
-│   └── SETUP.md            manual once-per-box steps (§12)
+│   ├── SETUP.md            manual once-per-box steps (§12)
+│   └── CONTEXT.md          the context layer, operationally
 └── scripts/
     ├── new-agent.sh        scaffold a folder from _examples
     ├── sync-units.sh       generate per-agent timer drop-ins from manifests
+    ├── reindex.sh          rebuild the context index from markdown
     └── rollup.sh           weekly cost/run summary from runs.jsonl
 ```
 
-Note there is no `store.ts`. That's deliberate — see §8.
+`src/context/store.ts` is an index, not a store: no fact lives only there.
 
 ### Gitignore rules that matter
 
@@ -143,6 +161,8 @@ agents/*
 !agents/_examples/**
 runs.jsonl
 .env
+context/index.db*   # derived, rebuildable from the markdown
+context/shared/     # your cross-agent notes
 */repos/         # coding-agent checkouts — nested git, keep out
 ```
 
@@ -179,6 +199,11 @@ agents/news/
   "allowedTools": ["Read", "Write", "WebSearch", "WebFetch"],
   "maxTurns": 30,
   "timeoutSec": 900,
+  "context": {                     // optional — §7.1, docs/CONTEXT.md
+    "read": ["self", "shared/decisions"],
+    "write": ["self"],
+    "budget": { "tokens": 2000 }
+  },
   "schedule": {
     "prompt": "prompts/daily.md",
     "onCalendar": "*-*-* 07:00:00"   // systemd OnCalendar syntax
@@ -324,6 +349,40 @@ only once you know that.
 
 ---
 
+## 7.1 The context layer
+
+Writing notes solved *persistence*. It did not solve *retrieval*: an agent
+wanting one fact could read the whole file (a fixed tax on the budget, mostly
+irrelevant), grep it (exact tokens only, hits arrive without their heading),
+or — for anything in another agent's folder — not get it at all.
+
+The context layer is one local MCP server over a derived index. Operational
+detail in `docs/CONTEXT.md`; the load-bearing decisions:
+
+- **A chunk is a heading section**, so a hit reads on its own and cites
+  itself: `agents/guru/PROGRESS.md § Chapter 4 · 3d ago`. Provenance is what
+  lets an agent attribute a claim instead of asserting it.
+- **Hybrid retrieval.** BM25 (SQLite FTS5) for the words typed, embeddings
+  for the ones meant, fused with Reciprocal Rank Fusion.
+- **A token budget, not a `k`.** Results are trimmed by size, so retrieval
+  cannot blow the window it exists to protect (§2.5).
+- **Scopes live in the manifest** (`context.read` / `context.write`), so
+  `src/` still knows no agent by name (§2.1). No block → no server, no tools,
+  no change.
+- **Overlap is read-only.** `write` accepts `self` and `shared/*` only: an
+  agent reads another's notes, never edits them. Shared markdown, not
+  messaging — nothing becomes synchronous and no agent can block another
+  (§14 holds).
+- **Embeddings are optional.** No key configured → lexical-only. The provider
+  is a `.env` line (§11's "keep that seam clean").
+
+What this deliberately is *not*: automatic consolidation. Nothing is
+summarized or rewritten. The index is derived from markdown that stays the
+source of truth, `context_write` is still an explicit full-fidelity append,
+and pruning is still a human reading a file.
+
+---
+
 ## 8. Persistence
 
 Deliberately minimal.
@@ -346,6 +405,12 @@ Weekly rollup:
 jq -s 'group_by(.agent)|map({agent:.[0].agent,runs:length,cost:(map(.cost_usd)|add)})' runs.jsonl
 ```
 
+**Context index** — `context/index.db` (SQLite + FTS5), the one piece of the
+system that is a database and the one piece that can be deleted without
+losing anything: `scripts/reindex.sh` rebuilds it from the markdown. The
+runner refreshes it around each run — readable scopes before, written scopes
+after; an indexing failure degrades recall and never fails a run.
+
 **Channel → agent map** — built by scanning `agents/*/agent.json` at bridge
 startup, held in memory, reloaded on SIGHUP. Not persisted.
 
@@ -356,7 +421,9 @@ next fire retries.
 
 ### When a database becomes justified
 
-Only one of these, and none apply yet:
+One has happened: ranked hybrid retrieval over the fleet's markdown (§7.1) is
+not a flat-file operation, and the index it needs is derived state you can
+delete. That did not license a database for anything else. Still pending:
 
 - The thread map outgrowing a read-all/write-all flat file — thousands of
   live threads on one agent. Prune stale entries first; at one operator this
@@ -483,10 +550,18 @@ Say no to these:
 
 - A web dashboard. `journalctl` and Slack are the UI.
 - A database, until §8 says otherwise.
-- Automatic context consolidation. Manual pruning until we know what we read.
-- Agents talking to each other. They're independent by design.
+- Automatic context consolidation. The context layer indexes and retrieves;
+  it never summarizes or rewrites. Manual pruning until we know what we read.
+- Agents talking to each other. They read each other's markdown through
+  declared scopes (§7.1) and nothing more — no messages, no waiting, no
+  agent able to write into another's folder.
 - Docker/Kubernetes. One VPS, systemd.
 - tmux session management. Nothing needs a live TTY.
 - Multi-user or team support. If that's ever the need, use Claude Tag instead
   of rebuilding it.
 - A plugin system. The agent folder contract *is* the extension point.
+
+Two of these moved in §7.1 and the distinction matters: agents share *files*
+through declared read scopes, and the index is *derived*. Still no messaging
+between agents, still no automatic consolidation, still no database holding
+anything you can't regenerate.

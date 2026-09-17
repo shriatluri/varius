@@ -32,6 +32,10 @@ systemd timer ──▶ └────────┘     (cwd = agent folder)
 - **Memory is deliberate.** Agents write durable notes (`NOTES.md`,
   `PROGRESS.md`) at full fidelity before finishing — transcripts are never
   summarized.
+- **Memory is searchable.** A context layer indexes those notes by heading
+  section and serves them back over MCP — hybrid keyword + embedding search,
+  trimmed to a token budget, with provenance. Agents can read each other's
+  scopes; they can only write their own.
 - **Context is a budget.** Tools and MCP servers are allowlisted per agent in
   its manifest.
 
@@ -44,6 +48,12 @@ agents/news/
 ├── prompts/       # scheduled prompt(s)
 ├── .mcp.json      # MCP servers scoped to this agent (optional)
 └── NOTES.md       # durable knowledge (optional)
+```
+
+Retrieval over that knowledge is one manifest block:
+
+```jsonc
+"context": { "read": ["self", "guru", "shared/decisions"], "write": ["self"] }
 ```
 
 See `agents/_examples/news/` for a complete reference agent.
@@ -80,4 +90,5 @@ one-liner to the agent's channel and `#ops`.
 ## Docs
 
 - [`architecture.md`](architecture.md) — design, invariants, context strategy
+- [`docs/CONTEXT.md`](docs/CONTEXT.md) — the context layer: scopes, retrieval, index
 - [`docs/SETUP.md`](docs/SETUP.md) — once-per-box setup checklist

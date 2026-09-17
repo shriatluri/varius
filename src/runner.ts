@@ -2,6 +2,7 @@ import { execFile } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { promisify } from 'node:util';
+import { ContextSpawn, contextScopes, prepareContext, refreshContext } from './context/mcp';
 import { postPrReview, postText } from './slack';
 import { Agent, ClaudeResult, RunRecord, Trigger } from './types';
 
@@ -53,7 +54,7 @@ function absolutizeRules(agent: Agent, rules: string[]): string[] {
   });
 }
 
-function claudeArgs(agent: Agent, prompt: string, resumeSessionId?: string): string[] {
+function claudeArgs(agent: Agent, prompt: string, context: ContextSpawn | null, resumeSessionId?: string): string[] {
   const m = agent.manifest;
   const args = [
     '-p', prompt,
@@ -61,14 +62,16 @@ function claudeArgs(agent: Agent, prompt: string, resumeSessionId?: string): str
     '--model', m.model,
     '--max-turns', String(m.maxTurns),
   ];
-  if (m.allowedTools.length > 0) args.push('--allowedTools', ...absolutizeRules(agent, m.allowedTools));
+  const allowed = [...absolutizeRules(agent, m.allowedTools), ...(context?.allowRules ?? [])];
+  if (allowed.length > 0) args.push('--allowedTools', ...allowed);
 
   // Scope MCP per agent (§5). Without --strict-mcp-config, `claude -p` inherits
   // the operator's global MCP servers (Slack, Notion, …) — a context-budget leak
   // and a correctness hazard: an agent that sees slack_send_message tries to post
-  // itself instead of returning its result. Load only the agent's own .mcp.json,
-  // or nothing if it has none.
-  const mcpConfig = path.join(agent.dir, '.mcp.json');
+  // itself instead of returning its result. Load only the agent's own .mcp.json
+  // — or, for an agent with a context block, that file merged with the context
+  // server (context/mcp.ts).
+  const mcpConfig = context?.configPath ?? path.join(agent.dir, '.mcp.json');
   if (fs.existsSync(mcpConfig)) args.push('--mcp-config', mcpConfig);
   args.push('--strict-mcp-config');
 
@@ -86,8 +89,14 @@ function withLock(agent: Agent, trigger: Trigger, args: string[]): { cmd: string
   };
 }
 
-async function invoke(agent: Agent, trigger: Trigger, prompt: string, resumeSessionId?: string): Promise<ClaudeResult> {
-  const { cmd, args } = withLock(agent, trigger, claudeArgs(agent, prompt, resumeSessionId));
+async function invoke(
+  agent: Agent,
+  trigger: Trigger,
+  prompt: string,
+  context: ContextSpawn | null,
+  resumeSessionId?: string,
+): Promise<ClaudeResult> {
+  const { cmd, args } = withLock(agent, trigger, claudeArgs(agent, prompt, context, resumeSessionId));
   const { stdout } = await execFileP(cmd, args, {
     cwd: agent.dir,
     timeout: agent.manifest.timeoutSec * 1000,
@@ -126,17 +135,28 @@ export async function runAgent(agent: Agent, opts: RunOptions): Promise<void> {
   let resumeSessionId: string | undefined;
   if (trigger === 'slack' && threadTs) resumeSessionId = readThreads(agent)[threadTs];
 
+  const scopes = contextScopes(agent);
+  const context = prepareContext(agent);
+
   try {
+    // Index what the agent may read before it can ask for it; notes written by
+    // the last run of any agent land here.
+    await refreshContext(agent, [...scopes.read, ...scopes.write]);
+
     let result: ClaudeResult;
     try {
-      result = await invoke(agent, trigger, prompt, resumeSessionId);
+      result = await invoke(agent, trigger, prompt, context, resumeSessionId);
     } catch (err) {
       if (!resumeSessionId) throw err;
       // Stale session id (pruned, rotated, or from a dead install) — run fresh.
       console.error(`resume ${resumeSessionId} failed for ${agent.manifest.id}; retrying fresh`, err);
       resumeSessionId = undefined;
-      result = await invoke(agent, trigger, prompt);
+      result = await invoke(agent, trigger, prompt, context);
     }
+
+    // Whatever it wrote this run is searchable for the next one, by any agent
+    // whose scopes include it.
+    await refreshContext(agent, scopes.write);
 
     if (trigger === 'slack' && threadTs) writeThread(agent, threadTs, result.session_id);
 
@@ -180,6 +200,8 @@ export async function runAgent(agent: Agent, opts: RunOptions): Promise<void> {
     });
     await reportFailure(agent, trigger, err);
     throw err;
+  } finally {
+    context?.cleanup();
   }
 }
 

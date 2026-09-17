@@ -8,6 +8,20 @@ export interface AgentSchedule {
   onCalendar: string;
 }
 
+/**
+ * Opt-in access to the context layer (docs/CONTEXT.md). Read scopes may name
+ * other agents — overlap is read-only by construction; an agent writes into
+ * its own folder or a shared file, never into another agent's notes.
+ */
+export interface AgentContext {
+  /** "self" | "<agent-id>" | "shared/<topic>" */
+  read: string[];
+  /** Where context_write appends; omit for a read-only consumer. */
+  write?: string[];
+  /** Retrieval is trimmed to a token budget, not a result count. */
+  budget?: { tokens: number };
+}
+
 export interface AgentManifest {
   id: string;
   name: string;
@@ -22,6 +36,7 @@ export interface AgentManifest {
   timeoutSec: number;
   /** Attach Merge/Deny buttons when a reply contains a GitHub PR URL (coding agents). */
   prReview?: boolean;
+  context?: AgentContext;
   schedule?: AgentSchedule;
 }
 

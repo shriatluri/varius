@@ -7,13 +7,18 @@
     "post": "tsx src/cli.ts post",
     "agent": "tsx src/cli.ts agent",
     "bridge": "tsx src/bridge.ts",
+    "context": "tsx src/context/cli.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
     "@slack/bolt": "^4",
-    "@slack/web-api": "^7"
+    "@slack/web-api": "^7",
+    "better-sqlite3": "^11.10.0",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^9.6.0",
     "@types/node": "^20",
     "tsx": "^4",
     "typescript": "^5"
