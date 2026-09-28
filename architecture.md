@@ -9,6 +9,7 @@ Root architecture reference for this repo. Read this before changing anything.
 A personal fleet of Claude Code agents on a single VPS. Each agent is a folder
 with its own instructions, MCP servers, and Slack channel. Some run on a
 schedule and push digests; some answer when you message their channel.
+There is also a "Brain", shared memoery which is used when needed.
 
 Single operator. Single box. No multi-tenancy.
 
@@ -16,8 +17,7 @@ Single operator. Single box. No multi-tenancy.
 
 ## 2. Invariants
 
-These are the load-bearing decisions. Changing one is a design discussion, not
-a refactor.
+These are the underlying rules for the fleet.
 
 1. **An agent is a folder, not code.** Adding an agent means creating a
    directory with a manifest. It never means editing `src/`. If a feature
@@ -125,6 +125,9 @@ file, the result is posted as a **new top-level message**, and the session is
 │   ├── research/
 │   ├── guru/
 │   └── projx/
+├── brain/                  ← shared cross-agent memory, gitignored (§7)
+│   ├── BRAIN.md            index — one line per fact, always loaded
+│   └── facts/<slug>.md     one fact per file, loaded on demand
 ├── docs/
 │   └── SETUP.md            manual once-per-box steps (§12)
 └── scripts/
@@ -141,13 +144,14 @@ Note there is no `store.ts`. That's deliberate — see §8.
 agents/*
 !agents/_examples/
 !agents/_examples/**
+brain/          # shared memory about the operator — never committed
 runs.jsonl
 .env
 */repos/         # coding-agent checkouts — nested git, keep out
 ```
 
 Anyone cloning gets working code plus example agents, and none of your
-prompts, books, channel IDs, or repos.
+prompts, books, channel IDs, repos, or personal facts.
 
 ---
 
@@ -321,6 +325,83 @@ When a `NOTES.md` becomes annoying to read, prune it by hand. At four agents
 and one operator, five minutes a week of manual pruning beats debugging a
 summarizer — and it teaches you which notes you actually reference. Automate
 only once you know that.
+
+### The shared brain (cross-agent memory)
+
+Everything above is *per-agent* memory: guru's `PROGRESS.md`, news's
+`NOTES.md`, health's `PLAN.md` — each scoped to one folder, invisible to the
+others. That leaves a gap. Health knows the sleep data, journal knows the
+to-dos and mood, guru knows what's being learned, and none can see each other.
+The fleet reads as several disconnected bots rather than one assistant that
+knows the operator.
+
+The `brain/` is the fix: a single shared store of durable facts about the
+operator that any agent can read, and (gated — see slice 3 / SHRI-19) write.
+Per-agent memory is unchanged; the brain sits alongside it.
+
+```
+/srv/fleet/brain/
+├── BRAIN.md              index — one line per fact, always loaded
+└── facts/
+    └── <slug>.md         one fact per file, loaded on demand
+```
+
+**Two-tier read.** Every brain-enabled run loads `BRAIN.md` — a compact index,
+one line per fact. A fact file is opened only when its index line is relevant to
+the run. Shared context without paying to load all of it every time. This is
+the whole retrieval strategy: keep the always-loaded tier small, fetch the rest
+by relevance. If `BRAIN.md` ever grows past a screen, that is the signal to
+prune or split — not to add a retrieval engine.
+
+**Index line format** (machine-scannable, so later guards can validate it):
+
+```
+- [<slug>](facts/<slug>.md) · <type> — <one-line relevance description>
+```
+
+**Fact file format** — frontmatter plus a tight body written at full fidelity
+(never a transcript summary, per the rules above):
+
+```markdown
+---
+name: <slug>
+description: <one line, mirrors the index entry>
+type: goal          # identity | goal | routine | baseline | preference
+source: <agent-id>  # the agent (or the operator) that authored/owns it
+updated: YYYY-MM-DD
+---
+
+The fact, stated plainly. Which agents act on it, and why. Cross-links to
+related facts with [[other-slug]].
+```
+
+Five `type`s, on purpose: **identity** (durable who/where), **goal** (active
+objectives), **routine** (recurring patterns), **baseline** (normal ranges, so
+"off" is detectable), **preference** (how the operator wants things done). If a
+fact fits none, it probably isn't a brain fact.
+
+**The ownership boundary — the one rule that keeps this clean:** a fact lives in
+`brain/` *only if a second agent would act on it.* One source of truth per fact
+(invariant: §8's spirit applied to knowledge).
+
+| Fact | Where | Why |
+|---|---|---|
+| A recurring training/health plan | **brain** | one agent plans against it, another reads it as context |
+| A physiological baseline | **brain** | one agent flags off-days, another correlates it |
+| A writing/output preference | **brain** | every prose-writing agent applies it |
+| A tutor's chapter progress | **private** (`PROGRESS.md`) | only that agent acts on it |
+| A digest's "recently covered" list | **private** (`NOTES.md`) | only that agent acts on it |
+
+**Prune policy.** Manual, same as `NOTES.md`. When `BRAIN.md` gets annoying to
+read, prune by hand — that is also how you learn which facts get referenced. A
+fact whose `updated` is months stale and that nothing reads is a prune
+candidate. No auto-consolidation, no TTL, no summarizer.
+
+**What this is not** (and why): no database (§8 — nothing forces one), no
+embeddings or vector retrieval (the small always-loaded index *is* the
+retrieval — cheaper and can't rot), no shared-memory MCP server (it would tax
+every run's context window and add a service to supervise). Each rejected
+option buys capability the fact count doesn't yet justify.
 
 ---
 
