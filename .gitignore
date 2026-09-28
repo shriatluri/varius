@@ -2,6 +2,7 @@ node_modules/
 agents/*
 !agents/_examples/
 !agents/_examples/**
+brain/
 runs.jsonl
 .env
 */repo/
