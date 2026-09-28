@@ -9,6 +9,7 @@ Root architecture reference for this repo. Read this before changing anything.
 A personal fleet of Claude Code agents on a single VPS. Each agent is a folder
 with its own instructions, MCP servers, and Slack channel. Some run on a
 schedule and push digests; some answer when you message their channel.
+There is also a "Brain", shared memoery which is used when needed.
 
 Single operator. Single box. No multi-tenancy.
 
@@ -16,8 +17,7 @@ Single operator. Single box. No multi-tenancy.
 
 ## 2. Invariants
 
-These are the load-bearing decisions. Changing one is a design discussion, not
-a refactor.
+These are the underlying rules for the fleet.
 
 1. **An agent is a folder, not code.** Adding an agent means creating a
    directory with a manifest. It never means editing `src/`. If a feature
