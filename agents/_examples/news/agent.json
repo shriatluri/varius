@@ -4,7 +4,7 @@
   "channel": "C_REPLACE_ME",
   "model": "sonnet",
   "interactive": false,
-  "allowedTools": ["Read", "Write", "WebSearch", "WebFetch"],
+  "allowedTools": ["Read", "Write", "Edit", "WebSearch", "WebFetch"],
   "maxTurns": 30,
   "timeoutSec": 900,
   "schedule": {
