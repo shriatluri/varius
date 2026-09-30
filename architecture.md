@@ -483,7 +483,9 @@ This box holds a GitHub credential and a Claude OAuth token. Treat it like it.
 - Runs as a non-root `fleet` user. Never root.
 - **No `--dangerously-skip-permissions`.** Ever. Not "temporarily."
 - `allowedTools` is per-agent and minimal:
-  - news / research / guru → `Read`, `Write`, `WebSearch`, `WebFetch`
+  - news / research / guru → `Read`, `Write`, `Edit`, `WebSearch`, `WebFetch`
+    (`Edit` is required for any agent whose `NOTES.md` gets overwritten after
+    the first run — `Write` alone only covers creating the file)
   - coding agent → adds `Edit`, `Bash`, scoped via permission syntax, and only
     inside its own `repos/`
 - `Bash(*)` does not mean what it looks like — read the permissions syntax in
