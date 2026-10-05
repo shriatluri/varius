@@ -34,6 +34,15 @@ const SECRET = PLAID_ENV === 'sandbox'
   ? process.env.PLAID_SANDBOX_SECRET
   : process.env.PLAID_SECRET;
 
+// Update mode: re-consent an existing Item to add the investments product.
+// No new Item is created (costs no connection) and the access_token is unchanged.
+const ADD_INVESTMENTS = process.env.PLAID_ADD_INVESTMENTS === '1';
+const ACCESS_TOKEN = process.env.PLAID_ACCESS_TOKEN;
+if (ADD_INVESTMENTS && !ACCESS_TOKEN) {
+  console.error('PLAID_ADD_INVESTMENTS=1 needs an existing PLAID_ACCESS_TOKEN in .env');
+  process.exit(1);
+}
+
 if (!CLIENT_ID || !SECRET) {
   console.error(`Missing credentials for ${PLAID_ENV}: need PLAID_CLIENT_ID and ` +
     `${PLAID_ENV === 'sandbox' ? 'PLAID_SANDBOX_SECRET' : 'PLAID_SECRET'} in .env`);
@@ -63,32 +72,45 @@ function persistToken(token) {
 const server = createServer(async (req, res) => {
   try {
     if (req.url === '/') {
-      const { link_token } = await plaid('/link/token/create', {
+      const linkReq = {
         client_name: 'Varius Finances',
         user: { client_user_id: 'shri' },
-        products: ['transactions'],
         country_codes: ['US'],
         language: 'en',
-      });
+      };
+      if (ADD_INVESTMENTS) {
+        linkReq.access_token = ACCESS_TOKEN;            // update mode
+        linkReq.additional_consented_products = ['investments'];
+      } else {
+        linkReq.products = ['transactions'];
+      }
+      const { link_token } = await plaid('/link/token/create', linkReq);
       res.writeHead(200, { 'Content-Type': 'text/html' });
       res.end(`<!doctype html><meta charset=utf8>
 <title>Plaid Link — ${PLAID_ENV}</title>
 <style>body{font:16px system-ui;max-width:36rem;margin:4rem auto;padding:0 1rem}
 button{font:inherit;padding:.6rem 1.2rem;border-radius:8px;border:0;background:#111;color:#fff;cursor:pointer}
 .env{padding:.2rem .5rem;border-radius:6px;background:${PLAID_ENV === 'production' ? '#fde68a' : '#bbf7d0'}}</style>
-<h1>Connect a bank</h1>
+<h1>${ADD_INVESTMENTS ? 'Add investments access' : 'Connect a bank'}</h1>
 <p>Environment: <span class=env><b>${PLAID_ENV}</b></span>
-${PLAID_ENV === 'sandbox'
-  ? '— test bank, log in with <code>user_good</code> / <code>pass_good</code>. Costs no connections.'
-  : '— <b>real bank. Completing this spends 1 of your trial connections.</b>'}</p>
+${ADD_INVESTMENTS
+  ? '— update mode on your existing bank. Approve <b>investments</b> access. No new connection is used.'
+  : PLAID_ENV === 'sandbox'
+    ? '— test bank, log in with <code>user_good</code> / <code>pass_good</code>. Costs no connections.'
+    : '— <b>real bank. Completing this spends 1 of your trial connections.</b>'}</p>
 <button id=go>Launch Plaid Link</button>
 <pre id=out></pre>
 <script src="https://cdn.plaid.com/link/v2/stable/link-initialize.js"></script>
 <script>
+const UPDATE = ${ADD_INVESTMENTS};
 const out = document.getElementById('out');
 const handler = Plaid.create({
   token: ${JSON.stringify(link_token)},
   onSuccess: async (public_token) => {
+    if (UPDATE) {
+      out.textContent = '✅ Investments access granted. Return to the terminal.';
+      return;
+    }
     out.textContent = 'Exchanging token…';
     const r = await fetch('/exchange', {
       method: 'POST', headers: {'Content-Type': 'application/json'},
@@ -135,7 +157,8 @@ document.getElementById('go').onclick = () => handler.open();
 });
 
 server.listen(PORT, () => {
-  console.log(`Plaid Link helper — env=${PLAID_ENV}, reaching ${BASE}`);
+  console.log(`Plaid Link helper — env=${PLAID_ENV}${ADD_INVESTMENTS ? ' (update mode: adding investments)' : ''}, reaching ${BASE}`);
   console.log(`Open http://localhost:${PORT} in your browser.`);
-  if (PLAID_ENV === 'production') console.log('⚠️  Completing a real login here spends 1 trial connection.');
+  if (ADD_INVESTMENTS) console.log('ℹ️  Update mode — no new connection is used; your access_token is unchanged.');
+  else if (PLAID_ENV === 'production') console.log('⚠️  Completing a real login here spends 1 trial connection.');
 });
