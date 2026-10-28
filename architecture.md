@@ -276,7 +276,11 @@ reply continues the digest.
 
 - **Scheduled** → fresh session every run, no resume flag. A digest that
   resumed itself would grow without bound for an agent whose yesterday is
-  explicitly not context.
+  explicitly not context. After posting, the runner maps the post's `ts`
+  (every chunk's, for a long post) to the run's `session_id` in
+  `threads.json`, so a reply in the digest's thread resumes the session that
+  wrote it: "log the second one" lands with the digest in context. The next
+  scheduled run is still fresh; only that thread continues.
 - **Interactive** → `--resume <session_id>`, looked up from the agent's
   `threads.json` by `thread_ts`. New thread, or a stored id that no longer
   resolves → run fresh and record the returned `session_id`. This also gives
@@ -421,7 +425,8 @@ Deliberately minimal.
 **Thread map** — `threads.json` per agent:
 `{ "<thread_ts>": "<session_id>" }`. Read before an interactive run, written
 after; runner-owned and covered by the same `flock` as everything else in the
-folder. Scheduled runs never touch it. Prune stale threads whenever you prune
+folder. Scheduled runs never read it; they write one entry per posted message
+so replies to a digest resume it (§6). Prune stale threads whenever you prune
 `NOTES.md`.
 
 **Run log** — one JSON object appended to `runs.jsonl` per invocation:

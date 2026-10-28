@@ -189,8 +189,9 @@ async function reportFailure(agent: Agent, trigger: Trigger, err: unknown): Prom
 
 /**
  * The one code path for both triggers (architecture.md §3).
- * Session strategy (§6): scheduled → always fresh; interactive → --resume via
- * threads.json, falling back to a fresh session if the stored id is stale.
+ * Session strategy (§6): scheduled → always fresh, but its post's ts is mapped
+ * in threads.json; interactive → --resume via threads.json, falling back to a
+ * fresh session if the stored id is stale.
  */
 export async function runAgent(agent: Agent, opts: RunOptions): Promise<void> {
   const started = Date.now();
@@ -223,7 +224,13 @@ export async function runAgent(agent: Agent, opts: RunOptions): Promise<void> {
 
     if (!skipped) {
       // Threaded replies for inbound, top-level for scheduled (§9).
-      await postText(agent.manifest.channel, result.result, trigger === 'slack' ? threadTs : undefined);
+      const postedTs = await postText(agent.manifest.channel, result.result, trigger === 'slack' ? threadTs : undefined);
+
+      // A reply under a scheduled post opens a thread keyed by that post's ts.
+      // Map it to the session that wrote the post, so "log this" resumes with
+      // the digest in context instead of starting blind (§6). The scheduled
+      // run itself stays fresh; only the thread hanging off it resumes.
+      if (trigger === 'schedule') for (const ts of postedTs) writeThread(agent, ts, result.session_id);
 
       // Coding agents (manifest opt-in): a reply containing a PR link gets
       // Merge/Deny buttons. Clicks land in bridge.ts — merging stays human.
