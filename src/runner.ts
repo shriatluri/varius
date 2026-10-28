@@ -9,6 +9,10 @@ const execFileP = promisify(execFile);
 
 const RUNS_LOG = path.resolve(__dirname, '..', 'runs.jsonl');
 
+// Fallback spend ceiling when a manifest omits maxBudgetUsd. The CLI has no
+// turn cap (2.1.197), so without this a run is bounded only by timeoutSec.
+const DEFAULT_BUDGET_USD = 1.5;
+
 // Scheduled runs give up on the lock and let the next timer fire retry;
 // interactive runs wait out a long-running turn.
 const LOCK_WAIT_SCHEDULE_SEC = 300;
@@ -59,7 +63,10 @@ function claudeArgs(agent: Agent, prompt: string, resumeSessionId?: string): str
     '-p', prompt,
     '--output-format', 'json',
     '--model', m.model,
-    '--max-turns', String(m.maxTurns),
+    // `--max-turns` does NOT exist in CLI 2.1.197 — it was silently ignored,
+    // leaving runs uncapped (a media run hit 54 turns / 95 min). `--max-budget-usd`
+    // is the real ceiling and only works with --print (which we use).
+    '--max-budget-usd', String(m.maxBudgetUsd ?? DEFAULT_BUDGET_USD),
   ];
   if (m.allowedTools.length > 0) args.push('--allowedTools', ...absolutizeRules(agent, m.allowedTools));
 
