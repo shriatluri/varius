@@ -181,7 +181,8 @@ agents/news/
   "model": "sonnet",            // sonnet | haiku | opus
   "interactive": true,          // does it respond to Slack messages?
   "allowedTools": ["Read", "Write", "WebSearch", "WebFetch"],
-  "maxTurns": 30,
+  "maxTurns": 30,               // required by the registry, but not a CLI cap
+  "maxBudgetUsd": 1.5,          // optional; per-run spend ceiling (default 1.5)
   "timeoutSec": 900,
   "schedule": {
     "prompt": "prompts/daily.md",
@@ -249,16 +250,22 @@ box, systemd, a few hundred lines.
 
 ```bash
 flock -w "$LOCK_WAIT" "$AGENT_DIR/.lock" claude -p "$PROMPT" \
-  --output-format json \
+  --output-format stream-json --verbose \
   --model "$MODEL" \
+  --max-budget-usd "$MAX_BUDGET_USD" \
   --allowedTools $ALLOWED \
-  --max-turns "$MAX_TURNS" \
   --resume "$SESSION_ID"     # interactive runs resuming a thread only
 ```
 
-`--output-format json` returns an object containing `result`, `session_id`,
-`total_cost_usd`, `duration_ms`, and `num_turns`. Parse it once and you have
-both the reply and the run record.
+`stream-json` emits one JSON event per line; the final `{"type":"result"}`
+event carries `result`, `session_id`, `total_cost_usd`, `duration_ms`, and
+`num_turns`. The runner resolves on that line and then kills the process
+group, because the CLI (or a tool subprocess holding stdout) can outlive the
+work by over an hour. Plain `json` only flushes at exit, so it can't do this.
+
+There is no turn cap: `--max-turns` is not a CLI flag and is silently
+ignored. `--max-budget-usd` (from the manifest's `maxBudgetUsd`) and
+`timeoutSec` are the two ceilings on a run.
 
 ### Session strategy — the one place the two triggers differ
 
@@ -286,7 +293,9 @@ drop-in by hand.
 > Flag names drift between versions and `claude --help` does not list every
 > flag. Verify against the installed version before scripting; check
 > `--allowedTools` vs `--allowed-tools` casing on your build. (Verified on
-> 2.1.197: `--resume`, `--allowedTools`, `--output-format json` all present.)
+> 2.1.197: `--resume`, `--allowedTools`, `--output-format`, `--max-budget-usd`
+> present; `--max-turns` absent. On 2.1.304, `stream-json` under `-p` errors
+> without `--verbose`.)
 > Reference: https://code.claude.com/docs/en/cli-reference
 
 ---
@@ -506,7 +515,8 @@ real sessions.
 - Digest agents run overnight, off your working hours.
 - Default to `sonnet` or `haiku` for scheduled agents. `opus` only for the
   coding agent, and only on demand.
-- `maxTurns` set on every agent. No exceptions.
+- `maxBudgetUsd` set on every agent that runs heavy (the runner defaults to
+  $1.50). `maxTurns` is not enforced by the CLI; budget and `timeoutSec` are.
 - Scope `.mcp.json` per agent (§5). Unused tool definitions are pure overhead.
 
 `total_cost_usd` in the run log is a **notional API-equivalent figure**, not a
