@@ -25,9 +25,6 @@ by name in `src/`, the design is wrong.
   time; keep manifest rules relative so folders stay portable across boxes.
 - The CLI blocks `cd X && git …` (hook-safety guard) even when both segments
   are allowlisted. Agents must use `git -C <dir>` instead.
-- Bolt silently drops the app's own events (`ignoreSelf`, on by default).
-  Voice mode posts as the bot, so the bridge runs `ignoreSelf: false` and
-  gates bot messages on the `varius_voice` message metadata instead.
 - Bare `Write` in `allowedTools` only covers *creating* files. Appending or
   overwriting an existing file goes through the **Edit** tool — a note-writing
   agent without `Edit` works on day one, then gets denied once its NOTES.md
