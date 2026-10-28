@@ -64,15 +64,16 @@ export function chunk(text: string): string[] {
 /**
  * Post text to a channel, chunked to respect Slack limits.
  * With threadTs → threaded reply (inbound); without → top-level (scheduled digests).
- * Returns the ts of the first message posted.
+ * Returns the ts of every message posted, in order. A long top-level post is
+ * several messages, and a reply can thread under any of them.
  */
-export async function postText(channel: string, text: string, threadTs?: string): Promise<string | undefined> {
-  let firstTs: string | undefined;
+export async function postText(channel: string, text: string, threadTs?: string): Promise<string[]> {
+  const posted: string[] = [];
   for (const part of chunk(toSlackMrkdwn(text))) {
     const res = await client.chat.postMessage({ channel, text: part, thread_ts: threadTs });
-    firstTs ??= res.ts as string | undefined;
+    if (res.ts) posted.push(res.ts);
   }
-  return firstTs;
+  return posted;
 }
 
 /**
