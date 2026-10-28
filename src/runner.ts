@@ -1,13 +1,12 @@
-import { execFile } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { promisify } from 'node:util';
 import { postPrReview, postText } from './slack';
 import { Agent, ClaudeResult, RunRecord, Trigger } from './types';
 
-const execFileP = promisify(execFile);
-
 const RUNS_LOG = path.resolve(__dirname, '..', 'runs.jsonl');
+
+const MAX_OUTPUT_BYTES = 32 * 1024 * 1024;
 
 // Fallback spend ceiling when a manifest omits maxBudgetUsd. The CLI has no
 // turn cap (2.1.197), so without this a run is bounded only by timeoutSec.
@@ -61,7 +60,12 @@ function claudeArgs(agent: Agent, prompt: string, resumeSessionId?: string): str
   const m = agent.manifest;
   const args = [
     '-p', prompt,
-    '--output-format', 'json',
+    // stream-json (not json): `json` block-buffers one blob flushed only at
+    // process exit — and heavy runs don't exit for ~70 min after finishing the
+    // work, so we'd never see the result in time. stream-json emits NDJSON
+    // events as they happen; we resolve on the `result` line and kill the rest.
+    '--output-format', 'stream-json',
+    '--verbose', // required by the CLI for stream-json under --print
     '--model', m.model,
     // `--max-turns` does NOT exist in CLI 2.1.197 — it was silently ignored,
     // leaving runs uncapped (a media run hit 54 turns / 95 min). `--max-budget-usd`
@@ -93,16 +97,78 @@ function withLock(agent: Agent, trigger: Trigger, args: string[]): { cmd: string
   };
 }
 
-async function invoke(agent: Agent, trigger: Trigger, prompt: string, resumeSessionId?: string): Promise<ClaudeResult> {
+function invoke(agent: Agent, trigger: Trigger, prompt: string, resumeSessionId?: string): Promise<ClaudeResult> {
   const { cmd, args } = withLock(agent, trigger, claudeArgs(agent, prompt, resumeSessionId));
-  const { stdout } = await execFileP(cmd, args, {
-    cwd: agent.dir,
-    timeout: agent.manifest.timeoutSec * 1000,
-    maxBuffer: 32 * 1024 * 1024,
+  return new Promise<ClaudeResult>((resolve, reject) => {
+    // `detached` puts the child in its own process group so a timeout can kill
+    // the *whole tree* (claude + flock + any curl/tool subprocess). execFile's
+    // built-in timeout only signals the direct child: claude ignores SIGTERM,
+    // and even under SIGKILL an orphaned grandchild keeps the stdout pipe open,
+    // so the parent hung ~70 min past a finished run. `stdin: 'ignore'` gives
+    // claude an immediate EOF so nothing blocks waiting on stdin.
+    const child = spawn(cmd, args, {
+      cwd: agent.dir,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      detached: true,
+    });
+
+    let stdout = '';
+    let stderr = '';
+    let settled = false;
+
+    const killTree = (signal: NodeJS.Signals) => {
+      // Negative pid targets the whole process group (requires `detached`).
+      try { if (child.pid) process.kill(-child.pid, signal); }
+      catch { child.kill(signal); }
+    };
+    const finish = (fn: () => void) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      killTree('SIGKILL'); // reap claude + any tool subprocess, settled or not
+      fn();
+    };
+    const succeed = (p: ClaudeResult) => finish(() =>
+      p.is_error ? reject(new Error(`claude reported error: ${p.result?.slice(0, 200)}`)) : resolve(p));
+    const fail = (msg: string) => finish(() => reject(new Error(msg)));
+
+    const timer = setTimeout(() => fail(`timed out after ${agent.manifest.timeoutSec}s`), agent.manifest.timeoutSec * 1000);
+
+    // stream-json emits one JSON event per line. The terminal `{"type":"result"}`
+    // line carries the same payload the old `json` format returned (result text,
+    // session_id, total_cost_usd, num_turns, is_error). Resolve the instant it
+    // arrives — then killTree() reaps the process even if it won't exit on its own.
+    const scanLines = () => {
+      let nl: number;
+      while ((nl = stdout.indexOf('\n')) >= 0) {
+        const line = stdout.slice(0, nl).trim();
+        stdout = stdout.slice(nl + 1);
+        if (!line) continue;
+        try {
+          const evt = JSON.parse(line);
+          if (evt?.type === 'result') return succeed(evt as ClaudeResult);
+        } catch { /* partial or non-JSON verbose line — skip */ }
+      }
+    };
+
+    child.stdout.on('data', (d) => {
+      if (settled) return;
+      stdout += d;
+      if (stdout.length > MAX_OUTPUT_BYTES) return fail('output exceeded buffer limit');
+      scanLines();
+    });
+    child.stderr.on('data', (d) => { if (stderr.length < 8192) stderr += d; });
+
+    child.on('error', (err) => fail(err.message));
+    // No result line by the time stdout closes = genuine failure (crash, auth,
+    // bad flag). scanLines once more in case the last line lacked a trailing \n.
+    child.on('close', (code) => {
+      if (settled) return;
+      if (stdout.trim()) stdout += '\n';
+      scanLines();
+      if (!settled) fail(`claude exited ${code} with no result event: ${(stderr || stdout).slice(0, 200)}`);
+    });
   });
-  const parsed: ClaudeResult = JSON.parse(stdout);
-  if (parsed.is_error) throw new Error(`claude reported error: ${parsed.result?.slice(0, 200)}`);
-  return parsed;
 }
 
 function appendRun(record: RunRecord): void {
