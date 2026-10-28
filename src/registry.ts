@@ -13,6 +13,7 @@ function validate(manifest: AgentManifest, dir: string): string | null {
   if (!['sonnet', 'haiku', 'opus'].includes(manifest.model)) return `bad model "${manifest.model}"`;
   if (!Array.isArray(manifest.allowedTools)) return `allowedTools must be an array`;
   if (!Number.isInteger(manifest.maxTurns) || manifest.maxTurns < 1) return `maxTurns required`;
+  if (manifest.maxBudgetUsd !== undefined && !(manifest.maxBudgetUsd > 0)) return `maxBudgetUsd must be > 0`;
   if (!Number.isInteger(manifest.timeoutSec) || manifest.timeoutSec < 1) return `timeoutSec required`;
   if (manifest.schedule && !fs.existsSync(path.join(dir, manifest.schedule.prompt)))
     return `schedule.prompt "${manifest.schedule.prompt}" not found`;

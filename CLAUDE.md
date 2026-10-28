@@ -9,7 +9,13 @@ by name in `src/`, the design is wrong.
 - `flock(1)` is Linux-only. The runner skips locking on macOS — fine for local
   dev, but concurrency guarantees only hold on the VPS.
 - `claude` CLI flags drift between versions. Verified on 2.1.197: `--resume`,
-  `--allowedTools`, `--output-format json`. Re-check after CLI updates.
+  `--allowedTools`, `--output-format`, `--max-budget-usd`. Re-check after CLI
+  updates.
+- There is no `--max-turns` flag; the CLI silently ignores it. Runs are capped
+  by `--max-budget-usd` (manifest `maxBudgetUsd`, default $1.50) and
+  `timeoutSec`. The runner reads `stream-json` (which needs `--verbose` under
+  `-p`) and kills the process group on the `result` event, since the CLI can
+  outlive a finished run by over an hour.
 - Never `--continue`. Scheduled runs are always fresh; interactive runs resume
   via `threads.json` (`thread_ts → session_id`). See architecture.md §6.
 - MCP tools must appear in `allowedTools` (`mcp__<server>` or full names) —

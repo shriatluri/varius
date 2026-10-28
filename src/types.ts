@@ -19,6 +19,13 @@ export interface AgentManifest {
   /** Includes MCP entries (mcp__<server> or full tool names) — unlisted tools are silently denied in -p mode. */
   allowedTools: string[];
   maxTurns: number;
+  /**
+   * Hard ceiling on API spend per run, passed to `claude -p --max-budget-usd`.
+   * This is the real cap: CLI 2.1.197 has no `--max-turns` flag, so turn count
+   * is unbounded — budget is the only lever that actually stops a runaway run.
+   * Optional; falls back to DEFAULT_BUDGET_USD in the runner.
+   */
+  maxBudgetUsd?: number;
   timeoutSec: number;
   /** Attach Merge/Deny buttons when a reply contains a GitHub PR URL (coding agents). */
   prReview?: boolean;
