@@ -7,7 +7,9 @@
     "post": "tsx src/cli.ts post",
     "agent": "tsx src/cli.ts agent",
     "bridge": "tsx src/bridge.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test test/*.test.ts",
+    "check": "tsc --noEmit && npm test && for f in scripts/*.sh; do bash -n \"$f\" || exit 1; done"
   },
   "dependencies": {
     "@slack/bolt": "^4",

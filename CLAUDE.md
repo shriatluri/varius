@@ -4,6 +4,12 @@ Read `architecture.md` before changing anything — it is the root reference for
 this repo. An agent is a folder, not code; if a change special-cases an agent
 by name in `src/`, the design is wrong.
 
+## Done means `npm run check` passes
+
+Typecheck, the `test/` suite and `bash -n` on scripts. Tests run the runner
+against `test/fake-claude.sh` (via `VARIUS_CLAUDE_BIN`), never the real CLI.
+A change to how `claude` is spawned or parsed gets a fake-CLI mode and a test.
+
 ## Operational gotchas
 
 - `flock(1)` is Linux-only. The runner skips locking on macOS — fine for local
