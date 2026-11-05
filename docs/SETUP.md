@@ -75,9 +75,13 @@ the box can't clone. Push to it instead:
       today instead of debugging a silent failure at 07:00
 - [x] `sudo systemctl enable --now fleet-bridge` — after this, never run
       `npm run bridge` on a laptop too: two bridges answer every message
-- [x] Watchdog: `sudo cp deploy/fleet-watchdog.service
+- [x] Watchdog: `sudo install -o root -g root -m 755 scripts/watchdog.sh
+      /usr/local/sbin/fleet-watchdog && sudo cp deploy/fleet-watchdog.service
       deploy/fleet-watchdog.timer /etc/systemd/system/ && sudo systemctl
       daemon-reload && sudo systemctl enable --now fleet-watchdog.timer` —
+      it runs as root, so it runs the root-owned copy, never the
+      fleet-writable one in `/srv/fleet`. `git push vps` does not update
+      it: re-run the `install` after changing `scripts/watchdog.sh`. It
       restarts the bridge when Socket Mode zombifies (pong-timeout spam
       with the unit still green; seen twice in week one)
 
