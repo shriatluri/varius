@@ -67,7 +67,14 @@ function prAction(kind: 'merge' | 'deny') {
     const user = body.user?.id;
     const prUrl = action.value;
     const operator = process.env.OPERATOR_USER;
-    if (operator && user !== operator) {
+    // Fail closed: gh runs under the operator's auth, so an unset operator must
+    // not mean "anyone in the workspace can merge".
+    if (!operator) {
+      console.error(`pr ${kind} refused: OPERATOR_USER is unset`);
+      await respond({ response_type: 'ephemeral', replace_original: false, text: `:warning: ${kind} disabled: set OPERATOR_USER in .env` });
+      return;
+    }
+    if (user !== operator) {
       await respond({ response_type: 'ephemeral', replace_original: false, text: `Only <@${operator}> can ${kind} from here.` });
       return;
     }
