@@ -1,0 +1,8 @@
+[
+  { "name": "bold", "in": "**hi** and __there__", "out": "*hi* and *there*" },
+  { "name": "link", "in": "see [docs](https://example.com/a)", "out": "see <https://example.com/a|docs>" },
+  { "name": "heading", "in": "## Today ##", "out": "*Today*" },
+  { "name": "bullets", "in": "- one\n  * two", "out": "• one\n  • two" },
+  { "name": "rule dropped", "in": "a\n---\nb", "out": "a\n\nb" },
+  { "name": "fence untouched", "in": "```\n**x** - y\n```", "out": "```\n**x** - y\n```" }
+]

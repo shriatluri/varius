@@ -5,7 +5,7 @@ import { Agent, AgentManifest } from './types';
 const AGENTS_ROOT = path.resolve(__dirname, '..', 'agents');
 const ID_RE = /^[a-z][a-z0-9-]*$/;
 
-function validate(manifest: AgentManifest, dir: string): string | null {
+export function validate(manifest: AgentManifest, dir: string): string | null {
   const id = path.basename(dir);
   if (manifest.id !== id) return `id "${manifest.id}" != folder name "${id}"`;
   if (!ID_RE.test(manifest.id)) return `id must be lowercase-hyphen`;

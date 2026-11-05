@@ -17,6 +17,9 @@ const DEFAULT_BUDGET_USD = 1.5;
 const LOCK_WAIT_SCHEDULE_SEC = 300;
 const LOCK_WAIT_SLACK_SEC = 3600;
 
+// Overridable so tests can swap in a fake CLI (test/fake-claude/).
+const CLAUDE_BIN = process.env.VARIUS_CLAUDE_BIN || 'claude';
+
 export interface RunOptions {
   trigger: Trigger;
   prompt: string;
@@ -56,7 +59,7 @@ function absolutizeRules(agent: Agent, rules: string[]): string[] {
   });
 }
 
-function claudeArgs(agent: Agent, prompt: string, resumeSessionId?: string): string[] {
+export function claudeArgs(agent: Agent, prompt: string, resumeSessionId?: string): string[] {
   const m = agent.manifest;
   const args = [
     '-p', prompt,
@@ -89,15 +92,15 @@ function claudeArgs(agent: Agent, prompt: string, resumeSessionId?: string): str
 
 /** flock is Linux-only; local macOS dev runs unlocked. */
 function withLock(agent: Agent, trigger: Trigger, args: string[]): { cmd: string; args: string[] } {
-  if (process.platform !== 'linux') return { cmd: 'claude', args };
+  if (process.platform !== 'linux') return { cmd: CLAUDE_BIN, args };
   const wait = trigger === 'schedule' ? LOCK_WAIT_SCHEDULE_SEC : LOCK_WAIT_SLACK_SEC;
   return {
     cmd: 'flock',
-    args: ['-w', String(wait), path.join(agent.dir, '.lock'), 'claude', ...args],
+    args: ['-w', String(wait), path.join(agent.dir, '.lock'), CLAUDE_BIN, ...args],
   };
 }
 
-function invoke(agent: Agent, trigger: Trigger, prompt: string, resumeSessionId?: string): Promise<ClaudeResult> {
+export function invoke(agent: Agent, trigger: Trigger, prompt: string, resumeSessionId?: string): Promise<ClaudeResult> {
   const { cmd, args } = withLock(agent, trigger, claudeArgs(agent, prompt, resumeSessionId));
   return new Promise<ClaudeResult>((resolve, reject) => {
     // `detached` puts the child in its own process group so a timeout can kill
@@ -171,6 +174,11 @@ function invoke(agent: Agent, trigger: Trigger, prompt: string, resumeSessionId?
   });
 }
 
+/** Final-line `SKIP` sentinel (architecture.md §9), tolerant of markdown wrapping. */
+export function isSkip(text: string): boolean {
+  return /(^|\n)\s*[`*_~]*SKIP[`*_~]*\s*$/.test(text.trim());
+}
+
 function appendRun(record: RunRecord): void {
   fs.appendFileSync(RUNS_LOG, JSON.stringify(record) + '\n');
 }
@@ -220,7 +228,7 @@ export async function runAgent(agent: Agent, opts: RunOptions): Promise<void> {
     // sentinel but can't be trusted to say nothing else); agent personas must
     // never use the word in a real post. Interactive runs always post: a
     // person asked, silence reads as breakage.
-    const skipped = trigger === 'schedule' && /(^|\n)\s*[`*_~]*SKIP[`*_~]*\s*$/.test(result.result.trim());
+    const skipped = trigger === 'schedule' && isSkip(result.result);
 
     if (!skipped) {
       // Threaded replies for inbound, top-level for scheduled (§9).
