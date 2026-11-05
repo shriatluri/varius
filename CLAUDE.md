@@ -38,6 +38,10 @@ by name in `src/`, the design is wrong.
 - SIGHUP does not hot-reload the bridge: it kills the `npx` wrapper and
   `Restart=always` brings it back in ~5s with a fresh registry. "Reload" is a
   brief restart in practice; fine at this scale.
+- Nothing root runs may live in `/srv/fleet`: it is fleet-writable (agents,
+  `git push`), so that is a fleet → root escalation. The watchdog runs a
+  root-owned copy at `/usr/local/sbin/fleet-watchdog` and reads `.env` as
+  data, never `source`. Re-install it by hand after editing the script.
 - Deploying to the VPS is `git push vps main` (`/srv/fleet` has
   `receive.denyCurrentBranch=updateInstead`). Agent folders and `.env` are
   gitignored and travel by hand — see docs/SETUP.md §3.

@@ -3,6 +3,11 @@
 # logs "pong wasn't received" every ~13s forever without reconnecting, so the
 # unit stays green while every Slack message is silently eaten. Runs as root
 # from fleet-watchdog.timer every 5 minutes.
+#
+# Root runs an installed, root-owned copy (/usr/local/sbin/fleet-watchdog),
+# never this file: /srv/fleet is fleet-writable (agents, git push), so
+# executing anything from it as root is a fleet -> root escalation. Re-run the
+# install line in docs/SETUP.md §5 after changing this script.
 set -euo pipefail
 
 UNIT=fleet-bridge
@@ -31,7 +36,15 @@ echo "watchdog: restarting $UNIT ($reason)"
 systemctl restart "$UNIT"
 
 # One-liner to #ops; detail stays in journalctl (architecture.md §9).
-source /srv/fleet/.env 2>/dev/null || true
+# Read the two values as data. Never `source` the fleet-owned .env as root:
+# that executes whatever is in it.
+ENV_FILE=/srv/fleet/.env
+envval() {
+  { sed -n "s/^$1=//p" "$ENV_FILE" 2>/dev/null || true; } | tail -n1 | tr -d '\r' |
+    sed -e 's/^"\(.*\)"$/\1/' -e "s/^'\(.*\)'$/\1/"
+}
+SLACK_BOT_TOKEN=$(envval SLACK_BOT_TOKEN)
+OPS_CHANNEL=$(envval OPS_CHANNEL)
 if [[ -n "${SLACK_BOT_TOKEN:-}" && -n "${OPS_CHANNEL:-}" ]]; then
   curl -sS -m 10 -X POST https://slack.com/api/chat.postMessage \
     -H "Authorization: Bearer $SLACK_BOT_TOKEN" \
